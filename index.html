@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>日本列島大地主ゲーム</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- ===== タイトル画面 ===== -->
+<div id="screen-title" class="screen active">
+  <div class="title-container">
+    <div class="title-logo">🗾</div>
+    <h1 class="title-main">日本列島大地主ゲーム</h1>
+    <p class="title-sub">～ 47都道府県 地名争奪バトル ～</p>
+
+    <div class="title-card">
+      <h2>プレイ人数を選んでください</h2>
+      <div class="player-count-btns">
+        <button class="count-btn active" data-count="2">2人</button>
+        <button class="count-btn" data-count="3">3人</button>
+        <button class="count-btn" data-count="4">4人</button>
+      </div>
+
+      <div id="player-name-inputs" class="player-inputs">
+        <div class="player-input-row">
+          <span class="player-color-dot" style="background:#e74c3c"></span>
+          <input type="text" id="pname-0" placeholder="プレイヤー1" maxlength="10">
+        </div>
+        <div class="player-input-row">
+          <span class="player-color-dot" style="background:#3498db"></span>
+          <input type="text" id="pname-1" placeholder="プレイヤー2" maxlength="10">
+        </div>
+        <div class="player-input-row hidden" id="prow-2">
+          <span class="player-color-dot" style="background:#2ecc71"></span>
+          <input type="text" id="pname-2" placeholder="プレイヤー3" maxlength="10">
+        </div>
+        <div class="player-input-row hidden" id="prow-3">
+          <span class="player-color-dot" style="background:#f39c12"></span>
+          <input type="text" id="pname-3" placeholder="プレイヤー4" maxlength="10">
+        </div>
+      </div>
+
+      <button id="btn-start" class="btn-primary">ゲームスタート！</button>
+    </div>
+
+    <div class="title-rules">
+      <h3>📋 ゲームルール</h3>
+      <ul>
+        <li>サイコロを振ってマスを進む（2個）</li>
+        <li>土地マスに止まったら購入できる</li>
+        <li>同じ地域グループを揃えると<strong>家・ホテル</strong>を建設できる</li>
+        <li>他プレイヤーの土地に止まると通行料を支払う</li>
+        <li>旅カードマスではランダムなイベントが発生</li>
+        <li>スタートを通過すると <strong>2,000万円</strong> もらえる</li>
+        <li>所持金が <strong>0円未満</strong> になると破産</li>
+        <li>最後まで残ったプレイヤーが勝者！</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ===== ゲーム画面 ===== -->
+<div id="screen-game" class="screen">
+  <div class="game-layout">
+
+    <!-- 左パネル：プレイヤー情報 -->
+    <div class="panel-left">
+      <div class="panel-header">👥 プレイヤー</div>
+      <div id="player-list"></div>
+
+      <div class="turn-info" id="turn-info">
+        <div class="turn-player" id="turn-player-name">プレイヤー1のターン</div>
+        <div class="turn-money" id="turn-player-money">所持金：15,000万円</div>
+        <div class="turn-status" id="turn-status">サイコロを振ってください</div>
+      </div>
+
+      <div class="dice-area">
+        <div class="dice-display">
+          <div class="die" id="die1">🎲</div>
+          <div class="die" id="die2">🎲</div>
+        </div>
+        <div class="dice-total" id="dice-total"></div>
+        <button id="btn-roll" class="btn-roll">🎲 サイコロを振る</button>
+      </div>
+
+      <!-- アクションボタン群 -->
+      <div class="action-buttons" id="action-buttons">
+        <button id="btn-buy" class="btn-action btn-buy hidden">🏙️ 土地を購入</button>
+        <button id="btn-skip-buy" class="btn-action btn-skip hidden">スキップ</button>
+        <button id="btn-build" class="btn-action btn-build hidden">🏠 建設する</button>
+        <button id="btn-next" class="btn-action btn-next hidden">次のターンへ →</button>
+      </div>
+
+      <div class="log-panel">
+        <div class="panel-header">📜 ログ</div>
+        <div id="game-log" class="game-log"></div>
+      </div>
+    </div>
+
+    <!-- 中央：ボード -->
+    <div class="panel-center">
+      <div class="board-wrapper">
+        <div id="board" class="board"></div>
+      </div>
+    </div>
+
+    <!-- 右パネル：マス情報・所有地 -->
+    <div class="panel-right">
+      <div class="panel-header">🏙️ マス情報</div>
+      <div id="cell-info" class="cell-info">
+        <p class="cell-info-placeholder">マスに止まると<br>情報が表示されます</p>
+      </div>
+
+      <div class="panel-header" style="margin-top:12px">🗺️ 所有地一覧</div>
+      <div id="property-list" class="property-list">
+        <p class="placeholder-text">まだ誰も土地を所有していません</p>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ===== カードモーダル ===== -->
+<div id="modal-card" class="modal hidden">
+  <div class="modal-content modal-card-content">
+    <div class="card-icon">🎴</div>
+    <div class="card-title" id="card-title">旅カード</div>
+    <div class="card-text" id="card-text">カードの内容</div>
+    <button id="btn-card-ok" class="btn-primary">確認</button>
+  </div>
+</div>
+
+<!-- ===== 購入確認モーダル ===== -->
+<div id="modal-buy" class="modal hidden">
+  <div class="modal-content">
+    <h3 id="modal-buy-title">土地を購入しますか？</h3>
+    <div id="modal-buy-info" class="modal-info"></div>
+    <div class="modal-buttons">
+      <button id="btn-modal-buy" class="btn-primary">購入する</button>
+      <button id="btn-modal-skip" class="btn-secondary">スキップ</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 建設モーダル ===== -->
+<div id="modal-build" class="modal hidden">
+  <div class="modal-content modal-build-content">
+    <h3>🏠 建設する</h3>
+    <div id="build-list" class="build-list"></div>
+    <button id="btn-build-close" class="btn-secondary" style="margin-top:12px">閉じる</button>
+  </div>
+</div>
+
+<!-- ===== 汎用通知モーダル ===== -->
+<div id="modal-notify" class="modal hidden">
+  <div class="modal-content">
+    <div class="notify-icon" id="notify-icon">ℹ️</div>
+    <div class="notify-text" id="notify-text">メッセージ</div>
+    <button id="btn-notify-ok" class="btn-primary">OK</button>
+  </div>
+</div>
+
+<!-- ===== 結果画面 ===== -->
+<div id="screen-result" class="screen">
+  <div class="result-container">
+    <div class="result-trophy">🏆</div>
+    <h1 id="result-winner">勝者：プレイヤー1</h1>
+    <p class="result-sub">おめでとうございます！</p>
+    <div id="result-ranking" class="result-ranking"></div>
+    <button id="btn-restart" class="btn-primary" style="margin-top:24px">もう一度遊ぶ</button>
+  </div>
+</div>
+
+<script src="game.js"></script>
+</body>
+</html>
