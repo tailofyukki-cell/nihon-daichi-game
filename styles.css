@@ -93,6 +93,7 @@ html, body { height: 100%; font-family: 'Segoe UI', 'Hiragino Sans', 'Meiryo', s
 .log-entry.log-tax { color: #e67e22; }
 .log-entry.log-build { color: #3498db; }
 .log-entry.log-auction { color: #f5c152; }
+.log-entry.log-asset { color: #5bc0de; }
 .log-entry.log-bankrupt { color: #e74c3c; font-weight: bold; }
 .log-entry.log-system { color: #888; }
 
@@ -148,6 +149,8 @@ html, body { height: 100%; font-family: 'Segoe UI', 'Hiragino Sans', 'Meiryo', s
 }
 .cell:hover { border-color: rgba(245,166,35,0.5); background: rgba(245,166,35,0.05); z-index: 1; }
 .cell.current-cell { border-color: #f5a623 !important; box-shadow: 0 0 8px rgba(245,166,35,0.6); z-index: 2; }
+.cell.is-mortgaged { filter: saturate(0.45); }
+.cell.is-mortgaged::after { content: '🏦'; position: absolute; top: 8px; right: 3px; z-index: 3; font-size: 0.58rem; }
 
 /* コーナーマス */
 .cell.corner { background: #0a1628; }
@@ -343,3 +346,31 @@ html, body { height: 100%; font-family: 'Segoe UI', 'Hiragino Sans', 'Meiryo', s
 .auction-message.is-info { color: #b8c2d9; }
 .auction-buttons { align-items: center; }
 @media (max-width: 480px) { .auction-summary { grid-template-columns: 1fr; } .auction-player-money { width: 100%; margin-left: 0; } }
+
+/* ===== 資産整理モーダル ===== */
+.btn-assets { background: linear-gradient(135deg, #16a085, #117864); color: #fff; }
+.modal-assets-content { max-width: 620px; text-align: left; }
+.modal-assets-content h3 { margin-bottom: 6px; text-align: center; }
+.assets-icon { margin-bottom: 2px; font-size: 2.25rem; text-align: center; }
+.assets-description { margin: 0 0 14px; color: #b8c2d9; font-size: 0.8rem; line-height: 1.6; text-align: center; }
+.assets-summary { margin-bottom: 12px; padding: 10px 12px; border: 1px solid rgba(46,204,113,0.25); border-radius: 10px; background: rgba(46,204,113,0.07); color: #aee8c3; font-size: 0.82rem; text-align: center; }
+.assets-list { display: flex; flex-direction: column; gap: 8px; max-height: 420px; overflow-y: auto; }
+.asset-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 11px; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; background: rgba(255,255,255,0.04); }
+.asset-item.is-mortgaged { border-color: rgba(231,76,60,0.55); background: rgba(231,76,60,0.08); }
+.asset-name-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.asset-name { color: #f5c152; font-size: 0.95rem; font-weight: 700; }
+.asset-status { display: inline-flex; padding: 2px 6px; border-radius: 999px; background: rgba(46,204,113,0.15); color: #8be0ae; font-size: 0.68rem; font-weight: 700; }
+.asset-status.is-mortgaged { background: rgba(231,76,60,0.18); color: #f5a6a6; }
+.asset-detail { margin-top: 4px; color: #9aa6bd; font-size: 0.72rem; line-height: 1.5; }
+.asset-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px; }
+.asset-actions button { padding: 6px 8px; border: 0; border-radius: 6px; color: #fff; font-size: 0.7rem; font-weight: 700; cursor: pointer; }
+.asset-actions button:disabled { opacity: 0.35; cursor: not-allowed; }
+.btn-asset-sell { background: #c0392b; }
+.btn-asset-mortgage { background: #2471a3; }
+.btn-asset-redeem { background: #7d3c98; }
+.assets-empty { padding: 22px; color: #8995aa; font-size: 0.85rem; text-align: center; }
+.assets-close { display: block; margin: 0; }
+.assets-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; }
+.btn-asset-bankrupt { padding: 8px 10px; border: 1px solid rgba(231,76,60,0.65); border-radius: 8px; background: rgba(231,76,60,0.12); color: #f5a6a6; font-size: 0.74rem; cursor: pointer; }
+.mortgage-badge { display: inline-block; margin-left: 4px; color: #f06b5f; font-size: 0.68rem; font-weight: 700; }
+@media (max-width: 540px) { .asset-item { grid-template-columns: 1fr; } .asset-actions { justify-content: flex-start; } }

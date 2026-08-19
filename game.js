@@ -196,6 +196,8 @@ function startGame() {
     phase: 'roll',
     landOwners: {},
     buildings: {},
+    mortgagedProperties: {},
+    assetManagement: null,
     lastDice: [0, 0],
     currentCellId: 0,
   };
@@ -374,6 +376,8 @@ function updateCellOwner(propIndex) {
   } else {
     overlay.style.background = 'transparent';
   }
+  const cell = document.getElementById(`cell-${propIndex}`);
+  if (cell) cell.classList.toggle('is-mortgaged', isMortgaged(propIndex));
 }
 
 // ===== プレイヤーリスト描画 =====
@@ -418,6 +422,7 @@ function setupGameButtons() {
   document.getElementById('btn-buy').onclick = onBuy;
   document.getElementById('btn-skip-buy').onclick = onSkipBuy;
   document.getElementById('btn-build').onclick = onBuildOpen;
+  document.getElementById('btn-assets').onclick = onAssetsOpen;
   document.getElementById('btn-next').onclick = onNextTurn;
   document.getElementById('btn-card-ok').onclick = onCardOk;
   document.getElementById('btn-modal-buy').onclick = onModalBuy;
@@ -425,6 +430,8 @@ function setupGameButtons() {
   document.getElementById('btn-auction-bid').onclick = onAuctionBid;
   document.getElementById('btn-auction-pass').onclick = onAuctionPass;
   document.getElementById('btn-build-close').onclick = () => closeModal('modal-build');
+  document.getElementById('btn-assets-close').onclick = onAssetsClose;
+  document.getElementById('btn-assets-bankrupt').onclick = onAssetBankrupt;
   document.getElementById('btn-notify-ok').onclick = onNotifyOk;
   document.getElementById('auction-bid-input').onkeydown = (event) => {
     if (event.key === 'Enter') onAuctionBid();
@@ -561,14 +568,22 @@ function processLand(playerIndex, cellIndex) {
       return;
     }
     const owner = gameState.players[ownerIdx];
+    if (isMortgaged(cellIndex)) {
+      addLog(`${p.name} は抵当中の${prop.name}に止まった。通行料は発生しない。`, 'asset');
+      showNotify('抵当中の土地', `${prop.name}は抵当中のため、通行料は発生しません。`, '🏦');
+      gameState.phase = 'next';
+      setPhaseUI();
+      return;
+    }
     const rent = calcRent(cellIndex);
-    const actual = Math.min(rent, p.money);
-    p.money -= actual;
-    owner.money += actual;
+    p.money -= rent;
+    owner.money += rent;
     addLog(`${p.name} が${owner.name}の${prop.name}に止まり、通行料 ${formatMoney(rent)} を支払った。`, 'rent');
-    showNotify('通行料', `${owner.name}の${prop.name}に止まりました。\n通行料 ${formatMoney(rent)} を支払います。`, '💸');
     renderPlayerList();
-    checkBankruptcy(playerIndex);
+    if (checkBankruptcy(playerIndex)) return;
+    showNotify('通行料', `${owner.name}の${prop.name}に止まりました。\n通行料 ${formatMoney(rent)} を支払います。`, '💸');
+    gameState.phase = 'next';
+    setPhaseUI();
   }
 }
 
@@ -589,15 +604,38 @@ function processTax(playerIndex, prop) {
   const p = gameState.players[playerIndex];
   p.money -= prop.amount;
   addLog(`${p.name} が${prop.name}マスで ${formatMoney(prop.amount)} を支払った。`, 'tax');
-  showNotify(prop.name, `${prop.name}マスに止まりました。\n${formatMoney(prop.amount)} を支払います。`, '🧾');
   renderPlayerList();
-  checkBankruptcy(playerIndex);
+  if (checkBankruptcy(playerIndex)) return;
+  showNotify(prop.name, `${prop.name}マスに止まりました。\n${formatMoney(prop.amount)} を支払います。`, '🧾');
+  gameState.phase = 'next';
+  setPhaseUI();
 }
 
 // ===== 通行料計算 =====
+function isMortgaged(propIndex) {
+  return Boolean(gameState?.mortgagedProperties?.[propIndex]);
+}
+
+function getMortgageValue(prop) {
+  return Math.floor(prop.price * 0.5);
+}
+
+function getRedeemCost(prop) {
+  return Math.ceil((getMortgageValue(prop) * 1.1) / 10) * 10;
+}
+
+function getSaleValue(prop, propIndex) {
+  const building = gameState.buildings[propIndex];
+  const buildingRefund = building
+    ? (building.hotel ? Math.floor(prop.hotelCost * 0.5) : building.houses * Math.floor(prop.houseCost * 0.5))
+    : 0;
+  const landValue = isMortgaged(propIndex) ? 0 : getMortgageValue(prop);
+  return landValue + buildingRefund;
+}
+
 function calcRent(cellIndex) {
   const prop = PROPERTIES[cellIndex];
-  if (!prop.rent) return 0;
+  if (!prop.rent || isMortgaged(cellIndex)) return 0;
   const b = gameState.buildings[cellIndex];
   if (!b) return prop.rent[0];
   if (b.hotel) return prop.rent[5];
@@ -655,6 +693,7 @@ function assignLandToPlayer(playerIndex, cellIndex) {
   const player = gameState.players[playerIndex];
   if (!player.properties.includes(cellIndex)) player.properties.push(cellIndex);
   gameState.landOwners[cellIndex] = playerIndex;
+  delete gameState.mortgagedProperties[cellIndex];
   gameState.buildings[cellIndex] = { houses: 0, hotel: false };
   updateCellOwner(cellIndex);
 }
@@ -836,7 +875,7 @@ function onCardOk() {
       if (card.amount > 0) addLog(`${p.name} が ${formatMoney(card.amount)} を受け取った。`, 'card');
       else addLog(`${p.name} が ${formatMoney(-card.amount)} を支払った。`, 'card');
       renderPlayerList();
-      checkBankruptcy(playerIndex);
+      if (checkBankruptcy(playerIndex)) return;
       break;
 
     case 'move_to': {
@@ -899,7 +938,7 @@ function onCardOk() {
       p.money -= total;
       addLog(`${p.name} が修繕費 ${formatMoney(total)} を支払った。`, 'card');
       renderPlayerList();
-      checkBankruptcy(playerIndex);
+      if (checkBankruptcy(playerIndex)) return;
       break;
     }
   }
@@ -972,7 +1011,7 @@ function getBuildableProperties() {
     const prop = PROPERTIES[propIdx];
     if (!prop.group || prop.group === 'transit') return;
     const groupMembers = groupProps[prop.group] || [];
-    const ownsAll = groupMembers.every(idx => gameState.landOwners[idx] === gameState.currentPlayerIndex);
+    const ownsAll = groupMembers.every(idx => gameState.landOwners[idx] === gameState.currentPlayerIndex && !isMortgaged(idx));
     if (ownsAll) {
       const b = gameState.buildings[propIdx] || { houses: 0, hotel: false };
       if (!b.hotel) result.push(propIdx);
@@ -988,7 +1027,7 @@ function buildHouse(propIdx) {
   if (!gameState.buildings[propIdx]) gameState.buildings[propIdx] = { houses: 0, hotel: false };
   const b = gameState.buildings[propIdx];
 
-  if (b.hotel || b.houses >= 4 || p.money < prop.houseCost) return;
+  if (isMortgaged(propIdx) || b.hotel || b.houses >= 4 || p.money < prop.houseCost) return;
 
   p.money -= prop.houseCost;
   b.houses++;
@@ -1005,7 +1044,7 @@ function buildHotel(propIdx) {
   if (!gameState.buildings[propIdx]) gameState.buildings[propIdx] = { houses: 0, hotel: false };
   const b = gameState.buildings[propIdx];
 
-  if (b.hotel || b.houses < 4 || p.money < prop.hotelCost) return;
+  if (isMortgaged(propIdx) || b.hotel || b.houses < 4 || p.money < prop.hotelCost) return;
 
   p.money -= prop.hotelCost;
   b.houses = 0;
@@ -1015,6 +1054,207 @@ function buildHotel(propIdx) {
   renderPlayerList();
   updatePropertyList();
   onBuildOpen();
+}
+
+// ===== 資産整理（売却・抵当） =====
+function getBuildingRefund(prop, propIndex) {
+  const building = gameState.buildings[propIndex];
+  if (!building) return 0;
+  return building.hotel
+    ? Math.floor(prop.hotelCost * 0.5)
+    : building.houses * Math.floor(prop.houseCost * 0.5);
+}
+
+function getManagedPlayerIndex() {
+  return gameState.assetManagement?.playerIndex ?? gameState.currentPlayerIndex;
+}
+
+function onAssetsOpen() {
+  openAssetManager(gameState.currentPlayerIndex, false);
+}
+
+function openAssetManager(playerIndex, critical) {
+  const player = gameState.players[playerIndex];
+  if (!player || player.bankrupt) return;
+  gameState.assetManagement = { playerIndex, critical };
+  gameState.phase = 'assets';
+  setPhaseUI();
+  updateTurnInfo();
+  renderAssetManager();
+  openModal('modal-assets');
+}
+
+function onAssetsClose() {
+  const management = gameState.assetManagement;
+  if (management?.critical) {
+    const player = gameState.players[management.playerIndex];
+    if (player.money < CONFIG.bankruptcyThreshold) {
+      showNotify('支払い不能', '所持金がマイナスです。資産を整理するか、破産を選択してください。', '⚠️');
+      return;
+    }
+  }
+  closeModal('modal-assets');
+  gameState.assetManagement = null;
+  gameState.phase = 'next';
+  setPhaseUI();
+  updateTurnInfo();
+}
+
+function renderAssetManager() {
+  const management = gameState.assetManagement;
+  if (!management) return;
+
+  const player = gameState.players[management.playerIndex];
+  const list = document.getElementById('assets-list');
+  const summary = document.getElementById('assets-summary');
+  const bankruptBtn = document.getElementById('btn-assets-bankrupt');
+  const shortfall = Math.max(0, CONFIG.bankruptcyThreshold - player.money);
+
+  summary.textContent = management.critical
+    ? (shortfall > 0
+      ? `${player.name}の不足額：${formatMoney(shortfall)}。資産整理で所持金を0万円以上に戻してください。`
+      : `${player.name}は支払い可能な状態に回復しました。閉じてターンを続けてください。`)
+    : `${player.name}の所持金：${formatMoney(player.money)}。ターン終了前なら任意に資産を整理できます。`;
+  bankruptBtn.classList.toggle('hidden', !management.critical || shortfall === 0);
+  list.innerHTML = '';
+
+  if (player.properties.length === 0) {
+    list.innerHTML = '<p class="assets-empty">整理できる所有地がありません。</p>';
+    return;
+  }
+
+  player.properties.forEach(propIndex => {
+    const prop = PROPERTIES[propIndex];
+    const building = gameState.buildings[propIndex] || { houses: 0, hotel: false };
+    const mortgaged = isMortgaged(propIndex);
+    const mortgageValue = getMortgageValue(prop);
+    const redeemCost = getRedeemCost(prop);
+    const saleValue = getSaleValue(prop, propIndex);
+    const buildingRefund = getBuildingRefund(prop, propIndex);
+    const hasBuildings = building.hotel || building.houses > 0;
+    const oneBuildingRefund = building.hotel ? Math.floor(prop.hotelCost * 0.5) : Math.floor(prop.houseCost * 0.5);
+    const buildingLabel = building.hotel ? 'ホテル×1' : building.houses > 0 ? `家×${building.houses}` : '建物なし';
+
+    const item = document.createElement('div');
+    item.className = `asset-item${mortgaged ? ' is-mortgaged' : ''}`;
+    item.innerHTML = `
+      <div>
+        <div class="asset-name-row">
+          <span class="asset-name">${prop.name}</span>
+          <span class="asset-status${mortgaged ? ' is-mortgaged' : ''}">${mortgaged ? '抵当中' : '通常'}</span>
+        </div>
+        <div class="asset-detail">
+          ${buildingLabel} | ${mortgaged ? `抵当解除：${formatMoney(redeemCost)}` : `抵当：+${formatMoney(mortgageValue)}`}<br>
+          土地を売却：+${formatMoney(saleValue)}${hasBuildings ? `（建物返金 ${formatMoney(buildingRefund)} を含む）` : ''}
+        </div>
+      </div>
+      <div class="asset-actions">
+        ${hasBuildings ? `<button class="btn-asset-sell-building" data-idx="${propIndex}">${building.hotel ? '🏨 ホテル売却' : '🏠 家を1棟売却'} +${formatMoney(oneBuildingRefund)}</button>` : ''}
+        ${mortgaged
+          ? `<button class="btn-asset-redeem" data-idx="${propIndex}" ${player.money >= redeemCost ? '' : 'disabled'}>🔓 抵当解除 -${formatMoney(redeemCost)}</button>`
+          : `<button class="btn-asset-mortgage" data-idx="${propIndex}" ${hasBuildings ? 'disabled' : ''}>🏦 抵当 +${formatMoney(mortgageValue)}</button>`}
+        <button class="btn-asset-sell" data-idx="${propIndex}">🧾 土地売却 +${formatMoney(saleValue)}</button>
+      </div>
+    `;
+    list.appendChild(item);
+  });
+
+  list.querySelectorAll('.btn-asset-sell-building').forEach(button => {
+    button.onclick = () => sellBuilding(parseInt(button.dataset.idx));
+  });
+  list.querySelectorAll('.btn-asset-mortgage').forEach(button => {
+    button.onclick = () => mortgageProperty(parseInt(button.dataset.idx));
+  });
+  list.querySelectorAll('.btn-asset-redeem').forEach(button => {
+    button.onclick = () => redeemProperty(parseInt(button.dataset.idx));
+  });
+  list.querySelectorAll('.btn-asset-sell').forEach(button => {
+    button.onclick = () => sellProperty(parseInt(button.dataset.idx));
+  });
+}
+
+function refreshAfterAssetChange(propIndex) {
+  if (propIndex !== undefined) {
+    updateCellOwner(propIndex);
+    renderBuildings(propIndex);
+    showCellInfo(propIndex);
+  }
+  renderPlayerList();
+  updatePropertyList();
+  updateTurnInfo();
+  renderAssetManager();
+}
+
+function sellBuilding(propIndex) {
+  const playerIndex = getManagedPlayerIndex();
+  const player = gameState.players[playerIndex];
+  const prop = PROPERTIES[propIndex];
+  const building = gameState.buildings[propIndex];
+  if (!player.properties.includes(propIndex) || !building || (!building.hotel && building.houses <= 0)) return;
+
+  let refund = 0;
+  if (building.hotel) {
+    refund = Math.floor(prop.hotelCost * 0.5);
+    building.hotel = false;
+  } else {
+    refund = Math.floor(prop.houseCost * 0.5);
+    building.houses--;
+  }
+  player.money += refund;
+  addLog(`${player.name} が ${prop.name} の建物を売却。+${formatMoney(refund)}`, 'asset');
+  refreshAfterAssetChange(propIndex);
+}
+
+function mortgageProperty(propIndex) {
+  const playerIndex = getManagedPlayerIndex();
+  const player = gameState.players[playerIndex];
+  const prop = PROPERTIES[propIndex];
+  const building = gameState.buildings[propIndex];
+  const hasBuildings = building?.hotel || building?.houses > 0;
+  if (!player.properties.includes(propIndex) || isMortgaged(propIndex) || hasBuildings) return;
+
+  const value = getMortgageValue(prop);
+  gameState.mortgagedProperties[propIndex] = true;
+  player.money += value;
+  addLog(`${player.name} が ${prop.name} を抵当に入れた。+${formatMoney(value)}`, 'asset');
+  refreshAfterAssetChange(propIndex);
+}
+
+function redeemProperty(propIndex) {
+  const playerIndex = getManagedPlayerIndex();
+  const player = gameState.players[playerIndex];
+  const prop = PROPERTIES[propIndex];
+  const cost = getRedeemCost(prop);
+  if (!player.properties.includes(propIndex) || !isMortgaged(propIndex) || player.money < cost) return;
+
+  player.money -= cost;
+  delete gameState.mortgagedProperties[propIndex];
+  addLog(`${player.name} が ${prop.name} の抵当を解除。-${formatMoney(cost)}`, 'asset');
+  refreshAfterAssetChange(propIndex);
+}
+
+function sellProperty(propIndex) {
+  const playerIndex = getManagedPlayerIndex();
+  const player = gameState.players[playerIndex];
+  const prop = PROPERTIES[propIndex];
+  if (!player.properties.includes(propIndex)) return;
+
+  const value = getSaleValue(prop, propIndex);
+  player.money += value;
+  player.properties = player.properties.filter(index => index !== propIndex);
+  delete gameState.landOwners[propIndex];
+  delete gameState.mortgagedProperties[propIndex];
+  gameState.buildings[propIndex] = { houses: 0, hotel: false };
+  addLog(`${player.name} が ${prop.name} を銀行へ売却。+${formatMoney(value)}`, 'asset');
+  refreshAfterAssetChange(propIndex);
+}
+
+function onAssetBankrupt() {
+  const management = gameState.assetManagement;
+  const player = management ? gameState.players[management.playerIndex] : null;
+  if (!management?.critical || !player || player.money >= CONFIG.bankruptcyThreshold) return;
+  closeModal('modal-assets');
+  declareBankruptcy(management.playerIndex);
 }
 
 // ===== 次のターン =====
@@ -1053,19 +1293,24 @@ function setPhaseUI() {
   const buyBtn = document.getElementById('btn-buy');
   const skipBtn = document.getElementById('btn-skip-buy');
   const buildBtn = document.getElementById('btn-build');
+  const assetsBtn = document.getElementById('btn-assets');
   const nextBtn = document.getElementById('btn-next');
 
   rollBtn.disabled = (phase !== 'roll');
   buyBtn.classList.add('hidden');
   skipBtn.classList.add('hidden');
+  buildBtn.classList.add('hidden');
+  assetsBtn.classList.add('hidden');
+  nextBtn.classList.add('hidden');
 
   if (phase === 'next') {
+    const player = getCurrentPlayer();
     const buildable = getBuildableProperties();
+    if (player.properties.length > 0) assetsBtn.classList.remove('hidden');
     if (buildable.length > 0) {
       buildBtn.classList.remove('hidden');
       nextBtn.textContent = '建設をスキップして次へ →';
     } else {
-      buildBtn.classList.add('hidden');
       nextBtn.textContent = '次のターンへ →';
     }
     nextBtn.classList.remove('hidden');
@@ -1073,9 +1318,6 @@ function setPhaseUI() {
     buildBtn.classList.remove('hidden');
     nextBtn.textContent = '建設をスキップして次へ →';
     nextBtn.classList.remove('hidden');
-  } else {
-    buildBtn.classList.add('hidden');
-    nextBtn.classList.add('hidden');
   }
 
   const statusMap = {
@@ -1083,6 +1325,7 @@ function setPhaseUI() {
     buy: '購入確認中...',
     card: 'カードを確認してください',
     auction: '土地の競売中です',
+    assets: '資産整理中です',
     next: 'ターン終了。次へ進んでください',
     build: '建設できます（任意）',
   };
@@ -1116,27 +1359,47 @@ function closeModal(id) {
 
 // ===== 破産チェック =====
 function checkBankruptcy(playerIndex) {
-  const p = gameState.players[playerIndex];
-  if (p.money < CONFIG.bankruptcyThreshold && !p.bankrupt) {
-    p.bankrupt = true;
-    addLog(`${p.name} が破産しました！`, 'bankrupt');
+  const player = gameState.players[playerIndex];
+  if (!player || player.bankrupt || player.money >= CONFIG.bankruptcyThreshold) return false;
 
-    p.properties.forEach(propIdx => {
-      delete gameState.landOwners[propIdx];
-      gameState.buildings[propIdx] = { houses: 0, hotel: false };
-      updateCellOwner(propIdx);
-      renderBuildings(propIdx);
-    });
-    p.properties = [];
-
-    renderPlayerList();
-    updatePropertyList();
-
-    const survivors = gameState.players.filter(pl => !pl.bankrupt);
-    if (survivors.length <= 1) {
-      setTimeout(() => endGame(), 500);
-    }
+  // 現在手番のプレイヤーには、直ちに破産させず資産整理の機会を与える。
+  if (playerIndex === gameState.currentPlayerIndex) {
+    openAssetManager(playerIndex, true);
+    return true;
   }
+
+  // 手番外プレイヤーの支払い不能は、ゲーム進行を止めないため即時破産とする。
+  declareBankruptcy(playerIndex);
+  return true;
+}
+
+function declareBankruptcy(playerIndex) {
+  const player = gameState.players[playerIndex];
+  if (!player || player.bankrupt) return;
+
+  player.bankrupt = true;
+  addLog(`${player.name} が破産しました。所有地は銀行へ返却されます。`, 'bankrupt');
+  player.properties.forEach(propIndex => {
+    delete gameState.landOwners[propIndex];
+    delete gameState.mortgagedProperties[propIndex];
+    gameState.buildings[propIndex] = { houses: 0, hotel: false };
+    updateCellOwner(propIndex);
+    renderBuildings(propIndex);
+  });
+  player.properties = [];
+  gameState.assetManagement = null;
+  closeModal('modal-assets');
+
+  renderPlayerList();
+  updatePropertyList();
+  const survivors = gameState.players.filter(candidate => !candidate.bankrupt);
+  if (survivors.length <= 1) {
+    setTimeout(() => endGame(), 500);
+    return;
+  }
+  gameState.phase = 'next';
+  setPhaseUI();
+  updateTurnInfo();
 }
 
 // ===== 総資産計算 =====
@@ -1145,7 +1408,7 @@ function calcTotalAssets(playerIndex) {
   let total = p.money;
   p.properties.forEach(propIdx => {
     const prop = PROPERTIES[propIdx];
-    total += prop.price;
+    total += isMortgaged(propIdx) ? getMortgageValue(prop) : prop.price;
     const b = gameState.buildings[propIdx];
     if (b) {
       total += b.houses * (prop.houseCost || 0);
@@ -1206,8 +1469,9 @@ function updatePropertyList() {
       item.className = 'property-item';
       item.style.borderLeftColor = p.color;
       const bldStr = b ? (b.hotel ? '🏨' : '🏠'.repeat(b.houses)) : '';
+      const mortgageStr = isMortgaged(propIdx) ? '<span class="mortgage-badge">🏦抵当中</span>' : '';
       item.innerHTML = `
-        <div class="property-item-name">${prop.name} ${bldStr}</div>
+        <div class="property-item-name">${prop.name} ${bldStr} ${mortgageStr}</div>
         <div class="property-item-sub">${p.name} | ¥${prop.price}</div>
       `;
       list.appendChild(item);
@@ -1227,6 +1491,7 @@ function showCellInfo(index) {
 
   if (prop.type === 'LAND') {
     const rent = calcRent(index);
+    const mortgaged = isMortgaged(index);
     const bldStr = b ? (b.hotel ? '🏨ホテル' : b.houses > 0 ? `🏠×${b.houses}` : 'なし') : 'なし';
     el.innerHTML = `
       <div class="cell-info-name">${prop.name}</div>
@@ -1246,6 +1511,7 @@ function showCellInfo(index) {
         所有者: ${owner ? owner.name : '未所有'}
       </div>
       <div class="cell-info-buildings">建物: ${bldStr}</div>
+      <div class="cell-info-buildings">状態: ${mortgaged ? '🏦 抵当中（通行料なし）' : '通常'}</div>
       <div class="cell-info-buildings">現在通行料: ${formatMoney(rent)}</div>
     `;
   } else {
