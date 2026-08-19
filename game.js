@@ -413,16 +413,22 @@ function updateTurnInfo() {
 
 // ===== ゲームボタン設定 =====
 function setupGameButtons() {
-  document.getElementById('btn-roll').addEventListener('click', onRoll);
-  document.getElementById('btn-buy').addEventListener('click', onBuy);
-  document.getElementById('btn-skip-buy').addEventListener('click', onSkipBuy);
-  document.getElementById('btn-build').addEventListener('click', onBuildOpen);
-  document.getElementById('btn-next').addEventListener('click', onNextTurn);
-  document.getElementById('btn-card-ok').addEventListener('click', onCardOk);
-  document.getElementById('btn-modal-buy').addEventListener('click', onModalBuy);
-  document.getElementById('btn-modal-skip').addEventListener('click', onModalSkip);
-  document.getElementById('btn-build-close').addEventListener('click', () => closeModal('modal-build'));
-  document.getElementById('btn-notify-ok').addEventListener('click', onNotifyOk);
+  // 再スタート時にイベントが重複しないよう、プロパティ代入で設定する。
+  document.getElementById('btn-roll').onclick = onRoll;
+  document.getElementById('btn-buy').onclick = onBuy;
+  document.getElementById('btn-skip-buy').onclick = onSkipBuy;
+  document.getElementById('btn-build').onclick = onBuildOpen;
+  document.getElementById('btn-next').onclick = onNextTurn;
+  document.getElementById('btn-card-ok').onclick = onCardOk;
+  document.getElementById('btn-modal-buy').onclick = onModalBuy;
+  document.getElementById('btn-modal-skip').onclick = onModalSkip;
+  document.getElementById('btn-auction-bid').onclick = onAuctionBid;
+  document.getElementById('btn-auction-pass').onclick = onAuctionPass;
+  document.getElementById('btn-build-close').onclick = () => closeModal('modal-build');
+  document.getElementById('btn-notify-ok').onclick = onNotifyOk;
+  document.getElementById('auction-bid-input').onkeydown = (event) => {
+    if (event.key === 'Enter') onAuctionBid();
+  };
 }
 
 // ===== サイコロ =====
@@ -614,6 +620,7 @@ function showBuyModal(cellIndex) {
   const canBuy = p.money >= prop.price;
   document.getElementById('btn-modal-buy').disabled = !canBuy;
   document.getElementById('btn-modal-buy').textContent = canBuy ? '購入する' : '資金不足';
+  document.getElementById('btn-modal-skip').textContent = '購入せず競売へ';
   openModal('modal-buy');
 }
 
@@ -634,22 +641,187 @@ function onBuy() {
     showNotify('資金不足', `${prop.name}を購入するには ${formatMoney(prop.price)} 必要ですが、所持金が不足しています。`, '💸');
     return;
   }
+
   p.money -= prop.price;
-  p.properties.push(cellIndex);
-  gameState.landOwners[cellIndex] = gameState.currentPlayerIndex;
-  gameState.buildings[cellIndex] = { houses: 0, hotel: false };
+  assignLandToPlayer(gameState.currentPlayerIndex, cellIndex);
   addLog(`${p.name} が ${prop.name} を ${formatMoney(prop.price)} で購入！`, 'buy');
-  updateCellOwner(cellIndex);
   renderPlayerList();
   updatePropertyList();
   gameState.phase = 'next';
   setPhaseUI();
 }
 
+function assignLandToPlayer(playerIndex, cellIndex) {
+  const player = gameState.players[playerIndex];
+  if (!player.properties.includes(cellIndex)) player.properties.push(cellIndex);
+  gameState.landOwners[cellIndex] = playerIndex;
+  gameState.buildings[cellIndex] = { houses: 0, hotel: false };
+  updateCellOwner(cellIndex);
+}
+
 function onSkipBuy() {
+  const p = getCurrentPlayer();
+  const cellIndex = p.position;
+  const prop = PROPERTIES[cellIndex];
+  addLog(`${p.name} が ${prop.name} の購入を見送った。競売を開始します。`, 'auction');
+  startAuction(cellIndex);
+}
+
+// ===== 土地競売 =====
+function startAuction(cellIndex) {
+  const prop = PROPERTIES[cellIndex];
+  const activePlayerIndexes = gameState.players
+    .map((player, index) => (!player.bankrupt ? index : null))
+    .filter(index => index !== null);
+
+  const minBid = Math.ceil((prop.price * 0.25) / 100) * 100;
+  gameState.auction = {
+    propertyIndex: cellIndex,
+    activePlayerIndexes,
+    currentBidderIndex: gameState.currentPlayerIndex,
+    highestBid: 0,
+    highestBidderIndex: null,
+    minBid,
+    consecutivePasses: 0,
+  };
+  gameState.phase = 'auction';
+  setPhaseUI();
+  openModal('modal-auction');
+  renderAuction();
+}
+
+function getMinimumAuctionBid(auction) {
+  return auction.highestBid > 0 ? auction.highestBid + 100 : auction.minBid;
+}
+
+function getNextAuctionBidder(currentIndex, skipIndex = null) {
+  const active = gameState.auction.activePlayerIndexes;
+  if (active.length <= 1) return active[0];
+  const startPos = active.indexOf(currentIndex);
+  for (let offset = 1; offset <= active.length; offset++) {
+    const candidate = active[(startPos + offset) % active.length];
+    if (candidate !== skipIndex) return candidate;
+  }
+  return currentIndex;
+}
+
+function renderAuction(message = '') {
+  const auction = gameState.auction;
+  if (!auction) return;
+
+  const prop = PROPERTIES[auction.propertyIndex];
+  const bidder = gameState.players[auction.currentBidderIndex];
+  const highestBidder = auction.highestBidderIndex === null ? null : gameState.players[auction.highestBidderIndex];
+  const minimum = getMinimumAuctionBid(auction);
+  const canBid = bidder.money >= minimum;
+  const input = document.getElementById('auction-bid-input');
+  const bidButton = document.getElementById('btn-auction-bid');
+  const messageEl = document.getElementById('auction-message');
+
+  document.getElementById('auction-property').textContent = `${prop.name}（通常価格：${formatMoney(prop.price)}）`;
+  document.getElementById('auction-current-bid').textContent = auction.highestBid > 0 ? formatMoney(auction.highestBid) : `最低 ${formatMoney(auction.minBid)}`;
+  document.getElementById('auction-highest-bidder').textContent = highestBidder ? highestBidder.name : '—';
+  document.getElementById('auction-current-player').textContent = `${bidder.emoji} ${bidder.name}`;
+  document.getElementById('auction-player-money').textContent = `所持金：${formatMoney(bidder.money)}`;
+
+  input.value = '';
+  input.min = minimum;
+  input.max = bidder.money;
+  input.placeholder = canBid ? `最低 ${formatMoney(minimum)}` : '入札可能額が不足しています';
+  input.disabled = !canBid;
+  bidButton.disabled = !canBid;
+
+  const defaultMessage = canBid
+    ? `最低入札額は ${formatMoney(minimum)} です。100万円単位で入力してください。`
+    : `所持金が不足しているため入札できません。今回はパスしてください。`;
+  messageEl.textContent = message || defaultMessage;
+  messageEl.classList.toggle('is-info', !message);
+}
+
+function onAuctionBid() {
+  const auction = gameState.auction;
+  if (!auction) return;
+
+  const bidder = gameState.players[auction.currentBidderIndex];
+  const bid = Number(document.getElementById('auction-bid-input').value);
+  const minimum = getMinimumAuctionBid(auction);
+
+  if (!Number.isInteger(bid) || bid <= 0 || bid % 100 !== 0) {
+    renderAuction('入札額は100万円単位の整数で入力してください。');
+    return;
+  }
+  if (bid < minimum) {
+    renderAuction(`現在の入札額より高い、${formatMoney(minimum)} 以上を入力してください。`);
+    return;
+  }
+  if (bid > bidder.money) {
+    renderAuction(`所持金を超える金額は入札できません。`);
+    return;
+  }
+
+  auction.highestBid = bid;
+  auction.highestBidderIndex = auction.currentBidderIndex;
+  auction.consecutivePasses = 0;
+  addLog(`${bidder.name} が ${PROPERTIES[auction.propertyIndex].name} に ${formatMoney(bid)} で入札。`, 'auction');
+
+  if (auction.activePlayerIndexes.length <= 1) {
+    finishAuction();
+    return;
+  }
+
+  auction.currentBidderIndex = getNextAuctionBidder(auction.currentBidderIndex, auction.highestBidderIndex);
+  renderAuction();
+}
+
+function onAuctionPass() {
+  const auction = gameState.auction;
+  if (!auction) return;
+
+  const bidder = gameState.players[auction.currentBidderIndex];
+  auction.consecutivePasses++;
+  addLog(`${bidder.name} が ${PROPERTIES[auction.propertyIndex].name} の競売をパス。`, 'auction');
+
+  const requiredPasses = auction.highestBidderIndex === null
+    ? auction.activePlayerIndexes.length
+    : auction.activePlayerIndexes.length - 1;
+
+  if (auction.consecutivePasses >= requiredPasses) {
+    finishAuction();
+    return;
+  }
+
+  auction.currentBidderIndex = getNextAuctionBidder(auction.currentBidderIndex, auction.highestBidderIndex);
+  renderAuction();
+}
+
+function finishAuction() {
+  const auction = gameState.auction;
+  if (!auction) return;
+
+  const prop = PROPERTIES[auction.propertyIndex];
+  const winnerIndex = auction.highestBidderIndex;
+  const winningBid = auction.highestBid;
+  gameState.auction = null;
+  closeModal('modal-auction');
+
+  if (winnerIndex !== null) {
+    const winner = gameState.players[winnerIndex];
+    winner.money -= winningBid;
+    assignLandToPlayer(winnerIndex, auction.propertyIndex);
+    addLog(`競売成立！ ${winner.name} が ${prop.name} を ${formatMoney(winningBid)} で落札。`, 'auction');
+    renderPlayerList();
+    updatePropertyList();
+    showCellInfo(auction.propertyIndex);
+    showNotify('競売成立', `${winner.name} が ${prop.name} を ${formatMoney(winningBid)} で落札しました。`, '🔔');
+  } else {
+    addLog(`${prop.name} は入札者がいなかったため、未所有のままです。`, 'auction');
+    showNotify('競売終了', `${prop.name} は入札者がいなかったため、未所有のままです。`, '🔔');
+  }
+
   gameState.phase = 'next';
   setPhaseUI();
 }
+
 
 // ===== カード処理 =====
 function onCardOk() {
@@ -910,6 +1082,7 @@ function setPhaseUI() {
     roll: 'サイコロを振ってください',
     buy: '購入確認中...',
     card: 'カードを確認してください',
+    auction: '土地の競売中です',
     next: 'ターン終了。次へ進んでください',
     build: '建設できます（任意）',
   };

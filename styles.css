@@ -92,6 +92,7 @@ html, body { height: 100%; font-family: 'Segoe UI', 'Hiragino Sans', 'Meiryo', s
 .log-entry.log-card { color: #9b59b6; }
 .log-entry.log-tax { color: #e67e22; }
 .log-entry.log-build { color: #3498db; }
+.log-entry.log-auction { color: #f5c152; }
 .log-entry.log-bankrupt { color: #e74c3c; font-weight: bold; }
 .log-entry.log-system { color: #888; }
 
@@ -316,3 +317,29 @@ html, body { height: 100%; font-family: 'Segoe UI', 'Hiragino Sans', 'Meiryo', s
 .group-shikoku         { background-color: #16a085; }
 .group-kyushu_okinawa  { background-color: #f39c12; }
 .group-transit         { background-color: #95a5a6; }
+
+/* ===== 土地競売モーダル ===== */
+.modal-auction-content {
+  max-width: 460px;
+  border: 1px solid rgba(245, 166, 35, 0.55);
+  text-align: left;
+}
+.modal-auction-content h3 { margin-bottom: 2px; text-align: center; }
+.auction-icon { margin-bottom: 4px; font-size: 2.25rem; text-align: center; }
+.auction-property { margin: 0 0 6px; color: #f5a623; font-size: 1.35rem; font-weight: 700; text-align: center; }
+.auction-description { margin: 0 0 16px; color: #b8c2d9; font-size: 0.85rem; line-height: 1.55; text-align: center; }
+.auction-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+.auction-summary > div, .auction-turn-card { border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; background: rgba(255,255,255,0.045); }
+.auction-summary > div { display: flex; flex-direction: column; gap: 4px; padding: 10px; }
+.auction-summary span, .auction-turn-label, .auction-input-label { color: #94a3b8; font-size: 0.72rem; }
+.auction-summary strong { color: #f5c152; font-size: 0.94rem; }
+.auction-turn-card { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin-bottom: 14px; padding: 11px 12px; }
+.auction-turn-card strong { color: #fff; font-size: 0.95rem; }
+.auction-player-money { margin-left: auto; color: #8be0ae; font-size: 0.8rem; }
+.auction-input-label { display: block; margin-bottom: 6px; }
+.auction-bid-input { width: 100%; padding: 11px 12px; border: 1px solid rgba(245,166,35,0.45); border-radius: 8px; outline: none; background: #08111f; color: #fff; font: inherit; }
+.auction-bid-input:focus { border-color: #f5a623; box-shadow: 0 0 0 3px rgba(245,166,35,0.14); }
+.auction-message { min-height: 1.2em; margin: 7px 0 14px; color: #f6a6a6; font-size: 0.78rem; }
+.auction-message.is-info { color: #b8c2d9; }
+.auction-buttons { align-items: center; }
+@media (max-width: 480px) { .auction-summary { grid-template-columns: 1fr; } .auction-player-money { width: 100%; margin-left: 0; } }

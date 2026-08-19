@@ -144,6 +144,36 @@
   </div>
 </div>
 
+<!-- ===== 土地競売モーダル ===== -->
+<div id="modal-auction" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="auction-title">
+  <div class="modal-content modal-auction-content">
+    <div class="auction-icon">🔔</div>
+    <h3 id="auction-title">土地の競売</h3>
+    <p id="auction-property" class="auction-property">土地名</p>
+    <p id="auction-description" class="auction-description">購入を見送ったため、土地を競売にかけます。</p>
+
+    <div class="auction-summary">
+      <div><span>現在の最高額</span><strong id="auction-current-bid">入札なし</strong></div>
+      <div><span>最高入札者</span><strong id="auction-highest-bidder">—</strong></div>
+    </div>
+
+    <div class="auction-turn-card">
+      <span class="auction-turn-label">入札するプレイヤー</span>
+      <strong id="auction-current-player">—</strong>
+      <span id="auction-player-money" class="auction-player-money">所持金：—</span>
+    </div>
+
+    <label for="auction-bid-input" class="auction-input-label">入札額（100万円単位）</label>
+    <input id="auction-bid-input" class="auction-bid-input" type="number" min="100" step="100" inputmode="numeric" aria-describedby="auction-message">
+    <p id="auction-message" class="auction-message" aria-live="polite"></p>
+
+    <div class="modal-buttons auction-buttons">
+      <button id="btn-auction-bid" class="btn-primary">入札する</button>
+      <button id="btn-auction-pass" class="btn-secondary">今回はパス</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== 建設モーダル ===== -->
 <div id="modal-build" class="modal hidden">
   <div class="modal-content modal-build-content">
