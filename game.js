@@ -24,8 +24,9 @@ const EMBEDDED_CONFIG = {
     "kyushu_okinawa":   { "name": "九州・沖縄",   "color": "#f39c12", "size": 8 },
     "transit":          { "name": "交通拠点",      "color": "#95a5a6", "size": 4 }
   },
-  "victoryCondition": "last_standing",
-  "victoryNote": "最後まで破産せずに残ったプレイヤーが勝者。全員が同意した場合は任意のターンで終了し、総資産（所持金＋土地購入価格＋建物価値）が最も多いプレイヤーが勝者となる。"
+  "victoryCondition": "selectable_turn_limit_or_last_standing",
+  "turnLimitOptions": [50, 80, 0],
+  "victoryNote": "50または80ターンを選んだ場合は終了時の総資産（所持金＋土地評価額＋建物評価額－抵当額）で勝者を決める。無制限では最後まで破産せずに残ったプレイヤーが勝者となる。"
 };
 
 const EMBEDDED_PROPERTIES = [
@@ -151,6 +152,17 @@ function initTitleScreen() {
     });
   });
 
+  document.querySelectorAll('.turn-limit-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.turn-limit-btn').forEach(button => button.classList.remove('active'));
+      btn.classList.add('active');
+      const limit = Number(btn.dataset.limit);
+      document.getElementById('turn-limit-help').textContent = limit > 0
+        ? `${limit}ターン終了時に総資産が最も多いプレイヤーが勝者です。`
+        : '無制限モードでは、最後まで破産せずに残ったプレイヤーが勝者です。';
+    });
+  });
+
   document.getElementById('btn-start').addEventListener('click', startGame);
   document.getElementById('btn-restart').addEventListener('click', () => showScreen('title'));
 }
@@ -170,6 +182,8 @@ function showScreen(name) {
 function startGame() {
   const countBtn = document.querySelector('.count-btn.active');
   const playerCount = parseInt(countBtn.dataset.count);
+  const turnLimitBtn = document.querySelector('.turn-limit-btn.active');
+  const turnLimit = Number(turnLimitBtn?.dataset.limit ?? 50);
 
   const players = [];
   for (let i = 0; i < playerCount; i++) {
@@ -193,6 +207,8 @@ function startGame() {
     players,
     currentPlayerIndex: 0,
     turn: 1,
+    turnLimit,
+    endReason: null,
     phase: 'roll',
     landOwners: {},
     buildings: {},
@@ -203,6 +219,7 @@ function startGame() {
   };
 
   shuffleDeck();
+  document.getElementById('game-log').innerHTML = '';
   buildBoard();
   renderPlayerList();
   updateTurnInfo();
@@ -211,6 +228,9 @@ function startGame() {
   showScreen('game');
   addLog('ゲーム開始！ 各プレイヤーの初期所持金：' + formatMoney(CONFIG.initialMoney), 'system');
   addLog(`${players.length}人で対戦`, 'system');
+  addLog(turnLimit > 0
+    ? `勝利条件：第${turnLimit}ラウンド終了時に総資産で判定`
+    : '勝利条件：無制限・最後まで残ったプレイヤーが勝者', 'system');
 }
 
 // ===== カードデッキ =====
@@ -404,11 +424,15 @@ function renderPlayerList() {
 
 function updateTurnInfo() {
   const p = getCurrentPlayer();
+  const roundLabel = gameState.turnLimit > 0
+    ? `第${gameState.turn}ラウンド / ${gameState.turnLimit}ラウンド`
+    : `第${gameState.turn}ラウンド / 無制限`;
   document.getElementById('turn-player-name').textContent = `${p.name}のターン`;
   document.getElementById('turn-player-money').textContent = `所持金：${formatMoney(p.money)}`;
+  document.getElementById('turn-counter').textContent = roundLabel;
 
   const boardTurn = document.getElementById('board-turn-display');
-  if (boardTurn) boardTurn.textContent = `${p.emoji} ${p.name}のターン`;
+  if (boardTurn) boardTurn.textContent = `${p.emoji} ${p.name}のターン | ${roundLabel}`;
 
   document.querySelectorAll('.player-card').forEach((c, i) => {
     c.classList.toggle('active', i === gameState.currentPlayerIndex);
@@ -1277,6 +1301,12 @@ function advanceTurn() {
 
   if (nextIdx === 0 || nextIdx < gameState.currentPlayerIndex) {
     gameState.turn++;
+    if (gameState.turnLimit > 0 && gameState.turn > gameState.turnLimit) {
+      gameState.endReason = 'turn_limit';
+      addLog(`第${gameState.turnLimit}ラウンドが終了。総資産評価で勝敗を決定します。`, 'system');
+      endGame('turn_limit');
+      return;
+    }
   }
 
   gameState.currentPlayerIndex = nextIdx;
@@ -1403,45 +1433,74 @@ function declareBankruptcy(playerIndex) {
 }
 
 // ===== 総資産計算 =====
-function calcTotalAssets(playerIndex) {
-  const p = gameState.players[playerIndex];
-  let total = p.money;
-  p.properties.forEach(propIdx => {
-    const prop = PROPERTIES[propIdx];
-    total += isMortgaged(propIdx) ? getMortgageValue(prop) : prop.price;
-    const b = gameState.buildings[propIdx];
-    if (b) {
-      total += b.houses * (prop.houseCost || 0);
-      if (b.hotel) total += prop.hotelCost || 0;
-    }
+function getAssetBreakdown(playerIndex) {
+  const player = gameState.players[playerIndex];
+  const breakdown = { cash: player.money, landValue: 0, buildingValue: 0, mortgageDebt: 0, total: player.money };
+
+  player.properties.forEach(propIndex => {
+    const prop = PROPERTIES[propIndex];
+    breakdown.landValue += prop.price;
+    if (isMortgaged(propIndex)) breakdown.mortgageDebt += getMortgageValue(prop);
+
+    const building = gameState.buildings[propIndex];
+    if (!building) return;
+    breakdown.buildingValue += building.houses * (prop.houseCost || 0);
+    if (building.hotel) breakdown.buildingValue += prop.hotelCost || 0;
   });
-  return total;
+
+  breakdown.total = breakdown.cash + breakdown.landValue + breakdown.buildingValue - breakdown.mortgageDebt;
+  return breakdown;
+}
+
+function calcTotalAssets(playerIndex) {
+  return getAssetBreakdown(playerIndex).total;
 }
 
 // ===== ゲーム終了 =====
-function endGame() {
+function endGame(reason = gameState.endReason || 'last_standing') {
+  gameState.endReason = reason;
   const ranking = gameState.players
-    .map((p, i) => ({ ...p, totalAssets: calcTotalAssets(i) }))
+    .map((player, index) => ({ ...player, assets: getAssetBreakdown(index), totalAssets: calcTotalAssets(index) }))
     .sort((a, b) => {
       if (a.bankrupt && !b.bankrupt) return 1;
       if (!a.bankrupt && b.bankrupt) return -1;
-      return b.totalAssets - a.totalAssets;
+      return (b.totalAssets - a.totalAssets)
+        || (b.assets.cash - a.assets.cash)
+        || (b.properties.length - a.properties.length);
     });
 
   const winner = ranking[0];
-  document.getElementById('result-winner').textContent = `🏆 ${winner.name} の勝利！`;
+  const coWinners = ranking.filter(player => !player.bankrupt
+    && player.totalAssets === winner.totalAssets
+    && player.assets.cash === winner.assets.cash
+    && player.properties.length === winner.properties.length);
+  document.getElementById('result-winner').textContent = coWinners.length > 1
+    ? `🤝 ${coWinners.map(player => player.name).join(' / ')} の同率優勝！`
+    : `🏆 ${winner.name} の勝利！`;
+
+  const isTurnLimit = reason === 'turn_limit';
+  document.getElementById('result-sub').textContent = isTurnLimit
+    ? `第${gameState.turnLimit}ラウンド終了時点の総資産評価`
+    : '最後まで残ったプレイヤーが勝者です。';
+  document.getElementById('result-summary').textContent = isTurnLimit
+    ? '総資産 = 所持金 + 土地評価額 + 建物評価額 − 抵当額。総資産が同額の場合は、所持金、所有地数の順で順位を決定します。'
+    : '破産していないプレイヤーを最優先にし、総資産で最終順位を表示しています。';
 
   const rankEl = document.getElementById('result-ranking');
   rankEl.innerHTML = '';
   const medals = ['🥇', '🥈', '🥉', '4️⃣'];
-  ranking.forEach((p, i) => {
+  ranking.forEach((player, index) => {
     const item = document.createElement('div');
     item.className = 'result-rank-item';
+    const details = player.assets;
     item.innerHTML = `
-      <div class="result-rank-num">${medals[i] || (i + 1)}</div>
-      <div class="player-dot" style="background:${p.color};width:12px;height:12px;border-radius:50%;flex-shrink:0"></div>
-      <div class="result-rank-name">${p.name}${p.bankrupt ? ' 💀' : ''}</div>
-      <div class="result-rank-money">総資産: ${formatMoney(p.totalAssets)}</div>
+      <div class="result-rank-num">${medals[index] || (index + 1)}</div>
+      <div class="player-dot" style="background:${player.color};width:12px;height:12px;border-radius:50%;flex-shrink:0"></div>
+      <div>
+        <div class="result-rank-name">${player.name}${player.bankrupt ? ' 💀' : ''}</div>
+        <div class="result-rank-details">現金 ${formatMoney(details.cash)} / 土地 ${formatMoney(details.landValue)} / 建物 ${formatMoney(details.buildingValue)}${details.mortgageDebt > 0 ? ` / 抵当 -${formatMoney(details.mortgageDebt)}` : ''}</div>
+      </div>
+      <div class="result-rank-asset-block"><div class="result-rank-money">総資産: ${formatMoney(player.totalAssets)}</div></div>
     `;
     rankEl.appendChild(item);
   });

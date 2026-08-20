@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>日本列島大地主ゲーム</title>
-  <link rel="stylesheet" href="styles.css?v=asset-management-0dc6425">
+  <link rel="stylesheet" href="styles.css?v=turn-limit-1">
 </head>
 <body>
 
@@ -21,6 +21,16 @@
         <button class="count-btn active" data-count="2">2人</button>
         <button class="count-btn" data-count="3">3人</button>
         <button class="count-btn" data-count="4">4人</button>
+      </div>
+
+      <div class="turn-limit-section">
+        <h2>勝利条件を選んでください</h2>
+        <div class="turn-limit-btns" role="group" aria-label="勝利条件の選択">
+          <button class="turn-limit-btn active" data-limit="50">50ターン</button>
+          <button class="turn-limit-btn" data-limit="80">80ターン</button>
+          <button class="turn-limit-btn" data-limit="0">無制限</button>
+        </div>
+        <p id="turn-limit-help" class="turn-limit-help">50ターン終了時に総資産が最も多いプレイヤーが勝者です。</p>
       </div>
 
       <div id="player-name-inputs" class="player-inputs">
@@ -54,8 +64,9 @@
         <li>他プレイヤーの土地に止まると通行料を支払う</li>
         <li>旅カードマスではランダムなイベントが発生</li>
         <li>スタートを通過すると <strong>2,000万円</strong> もらえる</li>
-        <li>所持金が <strong>0円未満</strong> になると破産</li>
-        <li>最後まで残ったプレイヤーが勝者！</li>
+        <li>所持金が <strong>0円未満</strong> になったら資産整理。それでも回復できなければ破産</li>
+        <li><strong>50 / 80ターン</strong>を選ぶと、終了時に総資産（所持金＋土地＋建物－抵当）で勝敗を決定</li>
+        <li>無制限なら最後まで残ったプレイヤーが勝者！</li>
       </ul>
     </div>
   </div>
@@ -73,6 +84,7 @@
       <div class="turn-info" id="turn-info">
         <div class="turn-player" id="turn-player-name">プレイヤー1のターン</div>
         <div class="turn-money" id="turn-player-money">所持金：15,000万円</div>
+        <div class="turn-counter" id="turn-counter">第1ラウンド / 50ラウンド</div>
         <div class="turn-status" id="turn-status">サイコロを振ってください</div>
       </div>
 
@@ -213,12 +225,13 @@
   <div class="result-container">
     <div class="result-trophy">🏆</div>
     <h1 id="result-winner">勝者：プレイヤー1</h1>
-    <p class="result-sub">おめでとうございます！</p>
+    <p class="result-sub" id="result-sub">おめでとうございます！</p>
+    <div id="result-summary" class="result-summary"></div>
     <div id="result-ranking" class="result-ranking"></div>
     <button id="btn-restart" class="btn-primary" style="margin-top:24px">もう一度遊ぶ</button>
   </div>
 </div>
 
-<script src="game.js?v=asset-management-0dc6425"></script>
+<script src="game.js?v=turn-limit-1"></script>
 </body>
 </html>
