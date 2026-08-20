@@ -145,12 +145,30 @@ const EMBEDDED_CARDS = [
   { "id": 37, "title": "旅人パスポート更新",    "text": "次の2回、他プレイヤーの土地の通行料が免除される。",                                     "type": "toll_free", "turns": 2 }
 ];
 
+// ===== 終盤限定カード（50ターンでは第41ラウンド、80ターンでは第65ラウンドから出現） =====
+const ENDGAME_CARDS = [
+  { "id": "E1", "title": "ラストスパート補助金", "text": "総資産トップとの差額に応じて、最大1,500万円の追い上げ補助金を受け取る。", "type": "trailing_bonus", "rate": 0.25, "minimum": 300, "cap": 1500 },
+  { "id": "E2", "title": "最終観光フェア", "text": "所有する土地1件につき200万円の最終観光収入を得る。", "type": "property_income", "amount": 200 },
+  { "id": "E3", "title": "全国ネットで特集！", "text": "次の2回、あなたの土地の通行料が2倍になる。", "type": "toll_boost", "multiplier": 2, "uses": 2 },
+  { "id": "E4", "title": "フィニッシュラインの選択", "text": "確実な資金を得るか、最後の旅に備えるかを選ぶ。", "type": "choice", "choices": [
+    { "label": "💰 650万円を受け取る", "detail": "最終スポンサーからの協賛金。", "effect": { "type": "money", "amount": 650 } },
+    { "label": "🎫 通行料を3回免除する", "detail": "旅人VIPパスを受け取る。", "effect": { "type": "toll_free", "turns": 3 } }
+  ] },
+  { "id": "E5", "title": "最後の大移動", "text": "ラストスパート。6マス前進するか、450万円の旅費を受け取るかを選ぶ。", "type": "choice", "choices": [
+    { "label": "🚄 6マス前進する", "detail": "次の大都市へ急行する。", "effect": { "type": "move", "steps": 6 } },
+    { "label": "🧳 450万円を受け取る", "detail": "旅程を整えて資金を確保する。", "effect": { "type": "money", "amount": 450 } }
+  ] },
+  { "id": "E6", "title": "全国から応援が届く", "text": "他の全プレイヤーから200万円ずつ応援金を受け取る。", "type": "collect_all", "amount": 200 },
+  { "id": "E7", "title": "終盤施設ボーナス", "text": "家・ホテル1件につき250万円の最終設備補助金を受け取る。", "type": "building_subsidy", "amount": 250 }
+];
+
 // ===== グローバル変数 =====
 let CONFIG = null;
 let PROPERTIES = null;
 let CARDS = null;
 let gameState = null;
 let cardDeck = [];
+let endgameCardDeck = [];
 const STATS_STORAGE_KEY = 'nihonDaichiGameStatsV1';
 const CPU_TURN_DELAY = 480;
 const AUDIO_SETTINGS_KEY = 'nihonDaichiGameAudioV1';
@@ -632,6 +650,8 @@ function startGame() {
     currentCellId: 0,
     cpuTimer: null,
     statsRecorded: false,
+    endgameEvent: null,
+    endgameEventsTriggered: 0,
   };
 
   shuffleDeck();
@@ -656,10 +676,71 @@ function startGame() {
 // ===== カードデッキ =====
 function shuffleDeck() {
   cardDeck = [...CARDS].sort(() => Math.random() - 0.5);
+  endgameCardDeck = [...ENDGAME_CARDS].sort(() => Math.random() - 0.5);
 }
+
+function getEndgameStartRound() {
+  if (!gameState?.turnLimit) return Number.POSITIVE_INFINITY;
+  return Math.max(2, Math.floor(gameState.turnLimit * 0.8) + 1);
+}
+
+function isEndgamePhase() {
+  return Boolean(gameState?.turnLimit > 0 && gameState.turn >= getEndgameStartRound());
+}
+
+function drawEndgameCard() {
+  if (endgameCardDeck.length === 0) endgameCardDeck = [...ENDGAME_CARDS].sort(() => Math.random() - 0.5);
+  return endgameCardDeck.pop();
+}
+
 function drawCard() {
+  if (isEndgamePhase() && Math.random() < 0.6) return drawEndgameCard();
   if (cardDeck.length === 0) shuffleDeck();
   return cardDeck.pop();
+}
+
+function getEndgameRentMultiplier() {
+  return gameState?.endgameEvent?.type === 'tourism_festival' ? 1.5 : 1;
+}
+
+function triggerEndgameRoundEvent() {
+  if (!isEndgamePhase()) {
+    gameState.endgameEvent = null;
+    return;
+  }
+
+  // 終盤開始ラウンドから2ラウンドごとに全体イベントを発動する。
+  const eventOffset = gameState.turn - getEndgameStartRound();
+  gameState.endgameEvent = null;
+  if (eventOffset % 2 !== 0) return;
+
+  const activeIndexes = gameState.players
+    .map((player, index) => (!player.bankrupt ? index : null))
+    .filter(index => index !== null);
+  if (activeIndexes.length === 0) return;
+
+  const eventType = Math.random() < 0.5 ? 'tourism_festival' : 'comeback_grant';
+  gameState.endgameEventsTriggered++;
+
+  if (eventType === 'tourism_festival') {
+    gameState.endgameEvent = { type: 'tourism_festival', multiplier: 1.5, round: gameState.turn };
+    playSfx('rent');
+    addLog(`🔥 終盤イベント「全国観光フィナーレ」発動！ このラウンドの通行料は1.5倍。`, 'endgame');
+    showNotify('🔥 終盤イベント：全国観光フィナーレ', '全国の観光需要が急上昇！<br><strong>このラウンドの通行料は1.5倍</strong>になります。', '🎆');
+    return;
+  }
+
+  const assets = activeIndexes.map(index => ({ index, total: calcTotalAssets(index) }));
+  const lowestAssets = Math.min(...assets.map(item => item.total));
+  const recipients = assets.filter(item => item.total === lowestAssets);
+  recipients.forEach(item => {
+    gameState.players[item.index].money += 1000;
+  });
+  renderPlayerList();
+  playSfx('salary');
+  const recipientNames = recipients.map(item => gameState.players[item.index].name).join(' / ');
+  addLog(`🔥 終盤イベント「逆転支援金」発動！ ${recipientNames} が ${formatMoney(1000)} を受け取った。`, 'endgame');
+  showNotify('🔥 終盤イベント：逆転支援金', `最終盤の順位争いを後押し！<br><strong>${recipientNames}</strong> が ${formatMoney(1000)} を受け取ります。`, '🚀');
 }
 
 // ===== ボード構築 =====
@@ -854,8 +935,9 @@ function renderPlayerList() {
 
 function updateTurnInfo() {
   const p = getCurrentPlayer();
+  const endgameLabel = isEndgamePhase() ? ' | 🔥 終盤戦' : '';
   const roundLabel = gameState.turnLimit > 0
-    ? `第${gameState.turn}ラウンド / ${gameState.turnLimit}ラウンド`
+    ? `第${gameState.turn}ラウンド / ${gameState.turnLimit}ラウンド${endgameLabel}`
     : `第${gameState.turn}ラウンド / 無制限`;
   document.getElementById('turn-player-name').textContent = `${p.name}${p.isCPU ? '（CPU）' : ''}のターン`;
   document.getElementById('turn-player-money').textContent = `所持金：${formatMoney(p.money)}`;
@@ -863,6 +945,7 @@ function updateTurnInfo() {
 
   const boardTurn = document.getElementById('board-turn-display');
   if (boardTurn) boardTurn.textContent = `${p.emoji} ${p.name}${p.isCPU ? '（CPU）' : ''}のターン | ${roundLabel}`;
+  document.getElementById('board')?.classList.toggle('endgame-active', isEndgamePhase());
 
   document.querySelectorAll('.player-card').forEach((c, i) => {
     c.classList.toggle('active', i === gameState.currentPlayerIndex);
@@ -969,6 +1052,10 @@ function chooseCPUCardChoice(card, playerIndex) {
     if (effect.type === 'money') score = effect.amount;
     if (effect.type === 'move') score = 260 + Math.max(0, effect.steps || 0) * 45;
     if (effect.type === 'move_to') score = 340;
+    if (effect.type === 'toll_free') score = 240 * (effect.turns || 1);
+    if (effect.type === 'toll_boost') score = 320 * (effect.uses || 1);
+    if (effect.type === 'property_income') score = player.properties.length * (effect.amount || 0);
+    if (effect.type === 'trailing_bonus') score = 500;
     if (player.money < 1500 && effect.type === 'money') score += 500;
     return { index, score };
   });
@@ -1210,15 +1297,19 @@ function processLand(playerIndex, cellIndex) {
     }
     const baseRent = calcRent(cellIndex);
     const boosted = owner.tollBoosts > 0;
-    const rent = boosted ? baseRent * 2 : baseRent;
+    const endgameMultiplier = getEndgameRentMultiplier();
+    const rent = Math.round(baseRent * (boosted ? 2 : 1) * endgameMultiplier);
     p.money -= rent;
     owner.money += rent;
     playSfx('rent');
     if (boosted) owner.tollBoosts--;
-    addLog(`${p.name} が${owner.name}の${prop.name}に止まり、通行料 ${formatMoney(rent)} を支払った。${boosted ? ' メディア紹介効果で2倍！' : ''}`, 'rent');
+    const rentModifiers = [boosted ? 'メディア紹介効果で2倍' : '', endgameMultiplier > 1 ? '終盤観光フィナーレで1.5倍' : ''].filter(Boolean);
+    addLog(`${p.name} が${owner.name}の${prop.name}に止まり、通行料 ${formatMoney(rent)} を支払った。${rentModifiers.length ? ` ${rentModifiers.join('・')}！` : ''}`, 'rent');
     renderPlayerList();
     if (checkBankruptcy(playerIndex)) return;
-    showNotify(boosted ? '通行料2倍！' : '通行料', `${owner.name}の${prop.name}に止まりました。\n通行料 ${formatMoney(rent)} を支払います。${boosted ? '\nメディア紹介効果が適用されました。' : ''}`, boosted ? '📣' : '💸');
+    const rentTitle = endgameMultiplier > 1 ? '終盤通行料アップ！' : (boosted ? '通行料2倍！' : '通行料');
+    const rentNotice = `${owner.name}の${prop.name}に止まりました。\n通行料 ${formatMoney(rent)} を支払います。${boosted ? '\nメディア紹介効果が適用されました。' : ''}${endgameMultiplier > 1 ? '\n全国観光フィナーレで通行料が1.5倍です。' : ''}`;
+    showNotify(rentTitle, rentNotice, endgameMultiplier > 1 || boosted ? '📣' : '💸');
     gameState.phase = 'next';
     setPhaseUI();
   }
@@ -1233,12 +1324,15 @@ function processCard(playerIndex) {
   renderCardModal(card);
   openModal('modal-card');
   playSfx('card');
-  addLog(`${gameState.players[playerIndex].name} が旅カードを引いた：「${card.title}」`, 'card');
+  addLog(`${gameState.players[playerIndex].name} が${String(card.id).startsWith('E') ? '終盤限定' : '旅'}カードを引いた：「${card.title}」`, String(card.id).startsWith('E') ? 'endgame' : 'card');
 }
 
 function renderCardModal(card) {
   const choiceButtons = document.getElementById('card-choice-buttons');
   const okButton = document.getElementById('btn-card-ok');
+  const isEndgameCard = String(card.id).startsWith('E');
+  document.getElementById('modal-card').classList.toggle('is-endgame-card', isEndgameCard);
+  document.getElementById('card-endgame-badge')?.classList.toggle('hidden', !isEndgameCard);
   document.getElementById('card-title').textContent = card.title;
   document.getElementById('card-text').textContent = card.text;
   choiceButtons.innerHTML = '';
@@ -1366,6 +1460,23 @@ function resolveCardEffect(effect, playerIndex) {
       addLog(`${player.name} が修繕費 ${formatMoney(total)} を支払った。`, 'card');
       renderPlayerList();
       if (checkBankruptcy(playerIndex)) return;
+      break;
+    }
+
+    case 'trailing_bonus': {
+      const leaderAssets = Math.max(...gameState.players
+        .map((candidate, index) => candidate.bankrupt ? Number.NEGATIVE_INFINITY : calcTotalAssets(index)));
+      const ownAssets = calcTotalAssets(playerIndex);
+      const gap = Math.max(0, leaderAssets - ownAssets);
+      const rawBonus = Math.floor((gap * (effect.rate || 0.25)) / 50) * 50;
+      const bonus = rawBonus > 0 ? Math.min(effect.cap || rawBonus, Math.max(effect.minimum || 0, rawBonus)) : 0;
+      if (bonus > 0) {
+        player.money += bonus;
+        addLog(`${player.name} は首位との差 ${formatMoney(gap)} に応じ、ラストスパート補助金 ${formatMoney(bonus)} を受け取った。`, 'card');
+      } else {
+        addLog(`${player.name} は現在トップのため、ラストスパート補助金の対象外。`, 'card');
+      }
+      renderPlayerList();
       break;
     }
 
@@ -2023,6 +2134,7 @@ function onNextTurn() {
 function advanceTurn() {
   let nextIdx = (gameState.currentPlayerIndex + 1) % gameState.players.length;
   let loopCount = 0;
+  let startedNewRound = false;
   while (gameState.players[nextIdx].bankrupt) {
     nextIdx = (nextIdx + 1) % gameState.players.length;
     loopCount++;
@@ -2033,6 +2145,7 @@ function advanceTurn() {
   }
 
   if (nextIdx === 0 || nextIdx < gameState.currentPlayerIndex) {
+    startedNewRound = true;
     gameState.turn++;
     if (gameState.turnLimit > 0 && gameState.turn > gameState.turnLimit) {
       gameState.endReason = 'turn_limit';
@@ -2044,9 +2157,10 @@ function advanceTurn() {
 
   gameState.currentPlayerIndex = nextIdx;
   gameState.phase = 'roll';
-  setPhaseUI();
   updateTurnInfo();
   addLog(`--- ${gameState.players[nextIdx].name}${gameState.players[nextIdx].isCPU ? '（CPU）' : ''}のターン ---`, 'system');
+  if (startedNewRound) triggerEndgameRoundEvent();
+  setPhaseUI();
 }
 
 // ===== フェーズUI =====
