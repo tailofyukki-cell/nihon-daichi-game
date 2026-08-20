@@ -121,7 +121,28 @@ const EMBEDDED_CARDS = [
   { "id": 22, "title": "5マス前進",             "text": "旅の追い風が吹いた！5マス前に進む。",                                                     "type": "move",     "steps": 5 },
   { "id": 23, "title": "豪雨で交通遮断",        "text": "豪雨で交通が遮断された。3マス戻る。",                                                     "type": "move",     "steps": -3 },
   { "id": 24, "title": "世界遺産登録！",        "text": "所有地が世界遺産に登録された！臨時収入が入った。",                                         "type": "money",    "amount": 1000 },
-  { "id": 25, "title": "名古屋へ出張",          "text": "名古屋で重要な商談がある。名古屋駅（マス38）へ移動する。",                                 "type": "move_to",  "target": 38 }
+  { "id": 25, "title": "名古屋へ出張",          "text": "名古屋で重要な商談がある。名古屋駅（マス38）へ移動する。",                                 "type": "move_to",  "target": 38 },
+  { "id": 26, "title": "ご当地グルメフェス",    "text": "屋台を出して収益を得るか、旅程を優先するか選べる。",                                         "type": "choice", "choices": [
+    { "label": "🍜 出店して400万円を得る", "detail": "ご当地グルメが大盛況。", "effect": { "type": "money", "amount": 400 } },
+    { "label": "🧳 4マス前進する", "detail": "イベントを早めに切り上げて次の街へ。", "effect": { "type": "move", "steps": 4 } }
+  ] },
+  { "id": 27, "title": "旅程を変更",            "text": "臨時便が出た。行き先を選んで移動する。",                                                     "type": "choice", "choices": [
+    { "label": "🚅 東京駅へ向かう", "detail": "東京駅（マス47）へ移動。", "effect": { "type": "move_to", "target": 47 } },
+    { "label": "✈️ 博多駅へ向かう", "detail": "博多駅（マス10）へ移動。", "effect": { "type": "move_to", "target": 10 } }
+  ] },
+  { "id": 28, "title": "全国観光キャンペーン",  "text": "所有する土地1件につき100万円の観光支援金を受け取る。",                                         "type": "property_income", "amount": 100 },
+  { "id": 29, "title": "地域の特産品が話題",    "text": "九州・沖縄の所有地1件につき250万円を受け取る。",                                             "type": "group_income", "group": "kyushu_okinawa", "amount": 250 },
+  { "id": 30, "title": "メディアで紹介された",  "text": "次に他プレイヤーがあなたの土地に止まったとき、通行料が2倍になる。",                         "type": "toll_boost", "multiplier": 2, "uses": 1 },
+  { "id": 31, "title": "地元へ里帰り",          "text": "所有する通常土地のうち、最も高額な土地へ移動する。所有地がなければ何も起こらない。",       "type": "travel_owned" },
+  { "id": 32, "title": "宿泊施設補助金",        "text": "家・ホテル1件につき150万円の補助金を受け取る。",                                         "type": "building_subsidy", "amount": 150 },
+  { "id": 33, "title": "地域振興ファンド",      "text": "中部の所有地1件につき200万円を受け取る。",                                               "type": "group_income", "group": "chubu", "amount": 200 },
+  { "id": 34, "title": "旅の分岐点",            "text": "休んで収入を得るか、先へ進むか選択する。",                                               "type": "choice", "choices": [
+    { "label": "☕ 休憩して300万円を得る", "detail": "旅番組の出演料を受け取る。", "effect": { "type": "money", "amount": 300 } },
+    { "label": "🗺️ 3マス前進する", "detail": "休まず次の目的地へ向かう。", "effect": { "type": "move", "steps": 3 } }
+  ] },
+  { "id": 35, "title": "観光インフラ拡充",      "text": "所有する土地1件につき80万円の整備補助金を受け取る。",                                    "type": "property_income", "amount": 80 },
+  { "id": 36, "title": "首都圏ビジネス需要",    "text": "関東の所有地1件につき180万円を受け取る。",                                               "type": "group_income", "group": "kanto", "amount": 180 },
+  { "id": 37, "title": "旅人パスポート更新",    "text": "次の2回、他プレイヤーの土地の通行料が免除される。",                                     "type": "toll_free", "turns": 2 }
 ];
 
 // ===== グローバル変数 =====
@@ -199,7 +220,8 @@ function startGame() {
       properties: [],
       bankrupt: false,
       skipTurns: 0,
-      tollFree: false,
+      tollFreeUses: 0,
+      tollBoosts: 0,
     });
   }
 
@@ -583,10 +605,10 @@ function processLand(playerIndex, cellIndex) {
     gameState.phase = 'next';
     setPhaseUI();
   } else {
-    if (p.tollFree) {
-      p.tollFree = false;
-      addLog(`${p.name} は旅人パスポートで通行料免除！`, 'system');
-      showNotify('通行料免除', '旅人パスポートを使用！通行料が免除されました。', '🎫');
+    if (p.tollFreeUses > 0) {
+      p.tollFreeUses--;
+      addLog(`${p.name} は旅人パスポートで通行料免除！ 残り${p.tollFreeUses}回`, 'system');
+      showNotify('通行料免除', `旅人パスポートを使用！通行料が免除されました。\n残り${p.tollFreeUses}回使用できます。`, '🎫');
       gameState.phase = 'next';
       setPhaseUI();
       return;
@@ -599,13 +621,16 @@ function processLand(playerIndex, cellIndex) {
       setPhaseUI();
       return;
     }
-    const rent = calcRent(cellIndex);
+    const baseRent = calcRent(cellIndex);
+    const boosted = owner.tollBoosts > 0;
+    const rent = boosted ? baseRent * 2 : baseRent;
     p.money -= rent;
     owner.money += rent;
-    addLog(`${p.name} が${owner.name}の${prop.name}に止まり、通行料 ${formatMoney(rent)} を支払った。`, 'rent');
+    if (boosted) owner.tollBoosts--;
+    addLog(`${p.name} が${owner.name}の${prop.name}に止まり、通行料 ${formatMoney(rent)} を支払った。${boosted ? ' メディア紹介効果で2倍！' : ''}`, 'rent');
     renderPlayerList();
     if (checkBankruptcy(playerIndex)) return;
-    showNotify('通行料', `${owner.name}の${prop.name}に止まりました。\n通行料 ${formatMoney(rent)} を支払います。`, '💸');
+    showNotify(boosted ? '通行料2倍！' : '通行料', `${owner.name}の${prop.name}に止まりました。\n通行料 ${formatMoney(rent)} を支払います。${boosted ? '\nメディア紹介効果が適用されました。' : ''}`, boosted ? '📣' : '💸');
     gameState.phase = 'next';
     setPhaseUI();
   }
@@ -617,11 +642,198 @@ function processCard(playerIndex) {
   gameState.pendingCardPlayer = playerIndex;
   gameState.phase = 'card';
   setPhaseUI();
-
-  document.getElementById('card-title').textContent = card.title;
-  document.getElementById('card-text').textContent = card.text;
+  renderCardModal(card);
   openModal('modal-card');
   addLog(`${gameState.players[playerIndex].name} が旅カードを引いた：「${card.title}」`, 'card');
+}
+
+function renderCardModal(card) {
+  const choiceButtons = document.getElementById('card-choice-buttons');
+  const okButton = document.getElementById('btn-card-ok');
+  document.getElementById('card-title').textContent = card.title;
+  document.getElementById('card-text').textContent = card.text;
+  choiceButtons.innerHTML = '';
+
+  if (card.type !== 'choice') {
+    choiceButtons.classList.add('hidden');
+    okButton.classList.remove('hidden');
+    return;
+  }
+
+  okButton.classList.add('hidden');
+  choiceButtons.classList.remove('hidden');
+  card.choices.forEach((choice, index) => {
+    const button = document.createElement('button');
+    button.className = 'card-choice-btn';
+    button.innerHTML = `${choice.label}<small>${choice.detail}</small>`;
+    button.onclick = () => onCardChoice(index);
+    choiceButtons.appendChild(button);
+  });
+}
+
+function onCardChoice(choiceIndex) {
+  const card = gameState.pendingCard;
+  const playerIndex = gameState.pendingCardPlayer;
+  const choice = card?.choices?.[choiceIndex];
+  if (!choice || playerIndex === undefined) return;
+
+  closeModal('modal-card');
+  addLog(`${gameState.players[playerIndex].name} は「${choice.label}」を選択。`, 'card');
+  resolveCardEffect(choice.effect, playerIndex);
+}
+
+function finishCardTurn() {
+  renderPlayerList();
+  updateTurnInfo();
+  gameState.phase = 'next';
+  setPhaseUI();
+}
+
+function moveByCard(playerIndex, targetIndex) {
+  const player = gameState.players[playerIndex];
+  if (targetIndex < player.position) {
+    player.money += CONFIG.startBonus;
+    addLog(`${player.name} がスタートを通過！ +${formatMoney(CONFIG.startBonus)}`, 'system');
+  }
+  player.position = targetIndex;
+  renderTokens();
+  highlightCell(targetIndex);
+  processCell(playerIndex, targetIndex);
+}
+
+function resolveCardEffect(effect, playerIndex) {
+  const player = gameState.players[playerIndex];
+  if (!effect || !player || player.bankrupt) return;
+
+  switch (effect.type) {
+    case 'money':
+      player.money += effect.amount;
+      addLog(effect.amount >= 0
+        ? `${player.name} が ${formatMoney(effect.amount)} を受け取った。`
+        : `${player.name} が ${formatMoney(-effect.amount)} を支払った。`, 'card');
+      renderPlayerList();
+      if (checkBankruptcy(playerIndex)) return;
+      break;
+
+    case 'move_to':
+      moveByCard(playerIndex, effect.target);
+      return;
+
+    case 'move': {
+      const nextPosition = ((player.position + effect.steps) % PROPERTIES.length + PROPERTIES.length) % PROPERTIES.length;
+      if (effect.steps > 0 && nextPosition < player.position) {
+        player.money += CONFIG.startBonus;
+        addLog(`${player.name} がスタートを通過！ +${formatMoney(CONFIG.startBonus)}`, 'system');
+      }
+      player.position = nextPosition;
+      renderTokens();
+      highlightCell(nextPosition);
+      processCell(playerIndex, nextPosition);
+      return;
+    }
+
+    case 'skip':
+      player.skipTurns += effect.turns;
+      addLog(`${player.name} が ${effect.turns}回休みになった。`, 'card');
+      break;
+
+    case 'toll_free': {
+      const uses = effect.turns || 1;
+      player.tollFreeUses += uses;
+      addLog(`${player.name} が通行料免除を${uses}回分獲得。`, 'card');
+      break;
+    }
+
+    case 'toll_boost': {
+      const uses = effect.uses || 1;
+      player.tollBoosts += uses;
+      addLog(`${player.name} の次の${uses}回の通行料が${effect.multiplier || 2}倍になる。`, 'card');
+      break;
+    }
+
+    case 'collect_all':
+      gameState.players.forEach((other, index) => {
+        if (index !== playerIndex && !other.bankrupt) {
+          other.money -= effect.amount;
+          player.money += effect.amount;
+        }
+      });
+      addLog(`${player.name} が全プレイヤーから ${formatMoney(effect.amount)} ずつ受け取った。`, 'card');
+      renderPlayerList();
+      gameState.players.forEach((_, index) => {
+        if (index !== playerIndex) checkBankruptcy(index);
+      });
+      break;
+
+    case 'repair': {
+      let total = 0;
+      player.properties.forEach(propIndex => {
+        const building = gameState.buildings[propIndex];
+        if (!building) return;
+        total += building.hotel ? effect.hotelCost : building.houses * effect.houseCost;
+      });
+      player.money -= total;
+      addLog(`${player.name} が修繕費 ${formatMoney(total)} を支払った。`, 'card');
+      renderPlayerList();
+      if (checkBankruptcy(playerIndex)) return;
+      break;
+    }
+
+    case 'property_income': {
+      const income = player.properties.length * effect.amount;
+      player.money += income;
+      addLog(`${player.name} が所有地${player.properties.length}件分の観光支援金 ${formatMoney(income)} を受け取った。`, 'card');
+      break;
+    }
+
+    case 'group_income': {
+      const groupProperties = player.properties.filter(propIndex => PROPERTIES[propIndex].group === effect.group);
+      const income = groupProperties.length * effect.amount;
+      const groupName = CONFIG.groups[effect.group]?.name || '対象地域';
+      player.money += income;
+      addLog(`${player.name} が${groupName}の所有地${groupProperties.length}件分、${formatMoney(income)} を受け取った。`, 'card');
+      break;
+    }
+
+    case 'building_subsidy': {
+      const facilityCount = player.properties.reduce((count, propIndex) => {
+        const building = gameState.buildings[propIndex];
+        if (!building) return count;
+        return count + (building.hotel ? 1 : building.houses);
+      }, 0);
+      const income = facilityCount * effect.amount;
+      player.money += income;
+      addLog(`${player.name} が建物${facilityCount}件分の補助金 ${formatMoney(income)} を受け取った。`, 'card');
+      break;
+    }
+
+    case 'travel_owned': {
+      const candidates = player.properties
+        .filter(propIndex => !isMortgaged(propIndex))
+        .sort((a, b) => PROPERTIES[b].price - PROPERTIES[a].price);
+      if (candidates.length === 0) {
+        addLog(`${player.name} は移動先となる通常の所有地がないため、その場にとどまった。`, 'card');
+        break;
+      }
+      const target = candidates[0];
+      addLog(`${player.name} は最も高額な所有地 ${PROPERTIES[target].name} へ移動。`, 'card');
+      moveByCard(playerIndex, target);
+      return;
+    }
+
+    default:
+      addLog(`${player.name} のカード効果を処理できませんでした。`, 'card');
+  }
+
+  finishCardTurn();
+}
+
+function onCardOk() {
+  const card = gameState.pendingCard;
+  const playerIndex = gameState.pendingCardPlayer;
+  if (!card || playerIndex === undefined) return;
+  closeModal('modal-card');
+  resolveCardEffect(card, playerIndex);
 }
 
 function processTax(playerIndex, prop) {
@@ -885,92 +1097,6 @@ function finishAuction() {
   setPhaseUI();
 }
 
-
-// ===== カード処理 =====
-function onCardOk() {
-  closeModal('modal-card');
-  const card = gameState.pendingCard;
-  const playerIndex = gameState.pendingCardPlayer;
-  const p = gameState.players[playerIndex];
-
-  switch (card.type) {
-    case 'money':
-      p.money += card.amount;
-      if (card.amount > 0) addLog(`${p.name} が ${formatMoney(card.amount)} を受け取った。`, 'card');
-      else addLog(`${p.name} が ${formatMoney(-card.amount)} を支払った。`, 'card');
-      renderPlayerList();
-      if (checkBankruptcy(playerIndex)) return;
-      break;
-
-    case 'move_to': {
-      const targetIdx = card.target;
-      if (targetIdx < p.position) {
-        p.money += CONFIG.startBonus;
-        addLog(`${p.name} がスタートを通過！ +${formatMoney(CONFIG.startBonus)}`, 'system');
-      }
-      p.position = targetIdx;
-      renderTokens();
-      highlightCell(targetIdx);
-      processCell(playerIndex, targetIdx);
-      return;
-    }
-
-    case 'move': {
-      const steps = card.steps;
-      const newPos = ((p.position + steps) % PROPERTIES.length + PROPERTIES.length) % PROPERTIES.length;
-      if (steps > 0 && newPos < p.position) {
-        p.money += CONFIG.startBonus;
-        addLog(`${p.name} がスタートを通過！ +${formatMoney(CONFIG.startBonus)}`, 'system');
-      }
-      p.position = newPos;
-      renderTokens();
-      highlightCell(newPos);
-      processCell(playerIndex, newPos);
-      return;
-    }
-
-    case 'skip':
-      p.skipTurns += card.turns;
-      addLog(`${p.name} が ${card.turns}回休みになった。`, 'card');
-      break;
-
-    case 'toll_free':
-      p.tollFree = true;
-      addLog(`${p.name} が通行料免除カードを取得。`, 'card');
-      break;
-
-    case 'collect_all':
-      gameState.players.forEach((other, i) => {
-        if (i !== playerIndex && !other.bankrupt) {
-          other.money -= card.amount;
-          p.money += card.amount;
-        }
-      });
-      addLog(`${p.name} が全プレイヤーから ${formatMoney(card.amount)} ずつ受け取った。`, 'card');
-      renderPlayerList();
-      gameState.players.forEach((_, i) => { if (i !== playerIndex) checkBankruptcy(i); });
-      break;
-
-    case 'repair': {
-      let total = 0;
-      p.properties.forEach(propIdx => {
-        const b = gameState.buildings[propIdx];
-        if (!b) return;
-        if (b.hotel) total += card.hotelCost;
-        else total += b.houses * card.houseCost;
-      });
-      p.money -= total;
-      addLog(`${p.name} が修繕費 ${formatMoney(total)} を支払った。`, 'card');
-      renderPlayerList();
-      if (checkBankruptcy(playerIndex)) return;
-      break;
-    }
-  }
-
-  updateTurnInfo();
-  gameState.phase = 'next';
-  setPhaseUI();
-}
 
 // ===== 建設モーダル =====
 function onBuildOpen() {
