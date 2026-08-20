@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>日本列島大地主ゲーム</title>
-  <link rel="stylesheet" href="styles.css?v=cards-diverse-1">
+  <link rel="stylesheet" href="styles.css?v=cpu-ranking-1">
 </head>
 <body>
 
@@ -37,22 +37,30 @@
         <div class="player-input-row">
           <span class="player-color-dot" style="background:#e74c3c"></span>
           <input type="text" id="pname-0" placeholder="プレイヤー1" maxlength="10">
+          <select id="ptype-0" class="player-type-select" aria-label="プレイヤー1の操作種別"><option value="human">人間</option><option value="cpu">CPU</option></select>
         </div>
         <div class="player-input-row">
           <span class="player-color-dot" style="background:#3498db"></span>
           <input type="text" id="pname-1" placeholder="プレイヤー2" maxlength="10">
+          <select id="ptype-1" class="player-type-select" aria-label="プレイヤー2の操作種別"><option value="human">人間</option><option value="cpu">CPU</option></select>
         </div>
         <div class="player-input-row hidden" id="prow-2">
           <span class="player-color-dot" style="background:#2ecc71"></span>
           <input type="text" id="pname-2" placeholder="プレイヤー3" maxlength="10">
+          <select id="ptype-2" class="player-type-select" aria-label="プレイヤー3の操作種別"><option value="human">人間</option><option value="cpu">CPU</option></select>
         </div>
         <div class="player-input-row hidden" id="prow-3">
           <span class="player-color-dot" style="background:#f39c12"></span>
           <input type="text" id="pname-3" placeholder="プレイヤー4" maxlength="10">
+          <select id="ptype-3" class="player-type-select" aria-label="プレイヤー4の操作種別"><option value="human">人間</option><option value="cpu">CPU</option></select>
         </div>
       </div>
 
-      <button id="btn-start" class="btn-primary">ゲームスタート！</button>
+      <p class="cpu-setup-help">各プレイヤーを「人間」または「CPU」に設定できます。CPUは標準的な購入・競売・建設・資産整理判断を自動で行います。</p>
+      <div class="title-action-row">
+        <button id="btn-start" class="btn-primary">ゲームスタート！</button>
+        <button id="btn-open-ranking" class="btn-secondary title-ranking-btn">🏅 戦績・ランキング</button>
+      </div>
     </div>
 
     <div class="title-rules">
@@ -221,6 +229,22 @@
   </div>
 </div>
 
+<!-- ===== ローカル戦績・ランキング ===== -->
+<div id="modal-ranking" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="ranking-title">
+  <div class="modal-content modal-ranking-content">
+    <div class="ranking-icon">🏅</div>
+    <h3 id="ranking-title">ローカル戦績・ランキング</h3>
+    <p class="ranking-description">このブラウザに保存される戦績です。別の端末・ブラウザには共有されません。</p>
+    <div id="stats-overview" class="stats-overview"></div>
+    <div id="stats-ranking" class="stats-ranking"></div>
+    <div id="stats-recent" class="stats-recent"></div>
+    <div class="modal-buttons ranking-buttons">
+      <button id="btn-ranking-clear" class="btn-danger-subtle">戦績をリセット</button>
+      <button id="btn-ranking-close" class="btn-secondary">閉じる</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== 結果画面 ===== -->
 <div id="screen-result" class="screen">
   <div class="result-container">
@@ -228,11 +252,12 @@
     <h1 id="result-winner">勝者：プレイヤー1</h1>
     <p class="result-sub" id="result-sub">おめでとうございます！</p>
     <div id="result-summary" class="result-summary"></div>
+    <p id="result-stats-note" class="result-stats-note"></p>
     <div id="result-ranking" class="result-ranking"></div>
     <button id="btn-restart" class="btn-primary" style="margin-top:24px">もう一度遊ぶ</button>
   </div>
 </div>
 
-<script src="game.js?v=cards-diverse-1"></script>
+<script src="game.js?v=cpu-ranking-1"></script>
 </body>
 </html>

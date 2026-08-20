@@ -490,3 +490,102 @@ html, body { height: 100%; font-family: 'Segoe UI', 'Hiragino Sans', 'Meiryo', s
   font-weight: 400;
   line-height: 1.4;
 }
+
+/* ===== CPU対戦・ローカル戦績 ===== */
+.player-type-select {
+  flex: 0 0 78px;
+  padding: 8px 7px;
+  border: 1px solid #4d5e80;
+  border-radius: 7px;
+  background: #111b30;
+  color: #e9eef8;
+  font-size: 0.8rem;
+}
+.cpu-setup-help {
+  margin: 10px 0 12px;
+  color: #aebad1;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  text-align: left;
+}
+.title-action-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.title-ranking-btn { padding: 11px 14px; }
+.cpu-badge {
+  display: inline-block;
+  margin-left: 5px;
+  padding: 2px 5px;
+  border-radius: 999px;
+  background: rgba(52, 152, 219, 0.2);
+  color: #84caff;
+  font-size: 0.64rem;
+  vertical-align: middle;
+}
+.result-stats-note {
+  margin: 10px auto 0;
+  color: #9fb1cf;
+  font-size: 0.78rem;
+}
+.modal-ranking-content {
+  width: min(92vw, 650px);
+  max-height: min(82vh, 700px);
+  overflow-y: auto;
+  text-align: left;
+}
+.ranking-icon { font-size: 2.2rem; text-align: center; }
+.ranking-description { color: #aebad1; font-size: 0.8rem; line-height: 1.5; }
+.stats-overview {
+  display: flex;
+  gap: 8px;
+  margin: 14px 0;
+}
+.stats-overview-item {
+  flex: 1;
+  padding: 10px;
+  border-radius: 8px;
+  background: rgba(41, 128, 185, 0.13);
+  text-align: center;
+}
+.stats-overview-item span { display: block; color: #9fb1cf; font-size: 0.68rem; }
+.stats-overview-item strong { display: block; margin-top: 4px; color: #f8c457; font-size: 1rem; }
+.stats-section-title { margin: 16px 0 7px; color: #f8c457; font-size: 0.85rem; }
+.stats-row {
+  display: grid;
+  grid-template-columns: 34px minmax(86px, 1fr) 56px 62px 82px;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 8px;
+  border-bottom: 1px solid rgba(132, 150, 185, 0.18);
+  font-size: 0.78rem;
+}
+.stats-row.is-header { color: #9fb1cf; font-size: 0.67rem; }
+.stats-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stats-empty { padding: 16px; color: #aebad1; text-align: center; }
+.stats-recent-item {
+  margin: 7px 0;
+  padding: 8px 10px;
+  border-radius: 7px;
+  background: rgba(255,255,255,0.04);
+  color: #d6dfed;
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+.btn-danger-subtle {
+  border: 1px solid rgba(231, 76, 60, 0.65);
+  border-radius: 7px;
+  padding: 9px 12px;
+  background: rgba(231, 76, 60, 0.12);
+  color: #ff9f94;
+  cursor: pointer;
+}
+.btn-danger-subtle:hover { background: rgba(231, 76, 60, 0.25); }
+@media (max-width: 520px) {
+  .player-type-select { flex-basis: 68px; font-size: 0.72rem; }
+  .stats-row { grid-template-columns: 27px minmax(75px, 1fr) 48px 50px 68px; gap: 4px; font-size: 0.68rem; }
+  .stats-overview-item { padding: 8px 4px; }
+}

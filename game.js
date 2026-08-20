@@ -151,6 +151,8 @@ let PROPERTIES = null;
 let CARDS = null;
 let gameState = null;
 let cardDeck = [];
+const STATS_STORAGE_KEY = 'nihonDaichiGameStatsV1';
+const CPU_TURN_DELAY = 480;
 
 // ===== 初期化（fetch不要・即時ロード） =====
 document.addEventListener('DOMContentLoaded', () => {
@@ -186,6 +188,9 @@ function initTitleScreen() {
 
   document.getElementById('btn-start').addEventListener('click', startGame);
   document.getElementById('btn-restart').addEventListener('click', () => showScreen('title'));
+  document.getElementById('btn-open-ranking').addEventListener('click', openRankingModal);
+  document.getElementById('btn-ranking-close').addEventListener('click', () => closeModal('modal-ranking'));
+  document.getElementById('btn-ranking-clear').addEventListener('click', clearLocalStats);
 }
 
 function showScreen(name) {
@@ -209,7 +214,8 @@ function startGame() {
   const players = [];
   for (let i = 0; i < playerCount; i++) {
     const nameInput = document.getElementById(`pname-${i}`);
-    const name = nameInput.value.trim() || `プレイヤー${i + 1}`;
+    const isCPU = document.getElementById(`ptype-${i}`)?.value === 'cpu';
+    const name = nameInput.value.trim() || (isCPU ? `CPU ${i + 1}` : `プレイヤー${i + 1}`);
     players.push({
       id: i,
       name,
@@ -222,6 +228,7 @@ function startGame() {
       skipTurns: 0,
       tollFreeUses: 0,
       tollBoosts: 0,
+      isCPU,
     });
   }
 
@@ -238,6 +245,8 @@ function startGame() {
     assetManagement: null,
     lastDice: [0, 0],
     currentCellId: 0,
+    cpuTimer: null,
+    statsRecorded: false,
   };
 
   shuffleDeck();
@@ -247,9 +256,11 @@ function startGame() {
   updateTurnInfo();
   updatePropertyList();
   setupGameButtons();
+  setPhaseUI();
   showScreen('game');
   addLog('ゲーム開始！ 各プレイヤーの初期所持金：' + formatMoney(CONFIG.initialMoney), 'system');
-  addLog(`${players.length}人で対戦`, 'system');
+  const cpuCount = players.filter(player => player.isCPU).length;
+  addLog(`${players.length}人で対戦${cpuCount > 0 ? `（CPU ${cpuCount}人）` : ''}`, 'system');
   addLog(turnLimit > 0
     ? `勝利条件：第${turnLimit}ラウンド終了時に総資産で判定`
     : '勝利条件：無制限・最後まで残ったプレイヤーが勝者', 'system');
@@ -434,7 +445,7 @@ function renderPlayerList() {
     card.innerHTML = `
       <div class="player-card-header">
         <div class="player-dot" style="background:${p.color}"></div>
-        <div class="player-name">${p.name}${p.bankrupt ? ' 💀' : ''}</div>
+        <div class="player-name">${p.name}${p.isCPU ? '<span class="cpu-badge">CPU</span>' : ''}${p.bankrupt ? ' 💀' : ''}</div>
       </div>
       <div class="player-money">💰 ${formatMoney(p.money)}</div>
       <div class="player-assets">総資産: ${formatMoney(totalAssets)}</div>
@@ -449,12 +460,12 @@ function updateTurnInfo() {
   const roundLabel = gameState.turnLimit > 0
     ? `第${gameState.turn}ラウンド / ${gameState.turnLimit}ラウンド`
     : `第${gameState.turn}ラウンド / 無制限`;
-  document.getElementById('turn-player-name').textContent = `${p.name}のターン`;
+  document.getElementById('turn-player-name').textContent = `${p.name}${p.isCPU ? '（CPU）' : ''}のターン`;
   document.getElementById('turn-player-money').textContent = `所持金：${formatMoney(p.money)}`;
   document.getElementById('turn-counter').textContent = roundLabel;
 
   const boardTurn = document.getElementById('board-turn-display');
-  if (boardTurn) boardTurn.textContent = `${p.emoji} ${p.name}のターン | ${roundLabel}`;
+  if (boardTurn) boardTurn.textContent = `${p.emoji} ${p.name}${p.isCPU ? '（CPU）' : ''}のターン | ${roundLabel}`;
 
   document.querySelectorAll('.player-card').forEach((c, i) => {
     c.classList.toggle('active', i === gameState.currentPlayerIndex);
@@ -518,6 +529,177 @@ function onRoll() {
 
 function getDiceFace(n) {
   return ['⚀','⚁','⚂','⚃','⚄','⚅'][n - 1];
+}
+
+// ===== CPU対戦 =====
+function scheduleCPUAction() {
+  if (!gameState) return;
+  if (gameState.cpuTimer) clearTimeout(gameState.cpuTimer);
+  const actingIndex = gameState.phase === 'auction'
+    ? gameState.auction?.currentBidderIndex
+    : gameState.currentPlayerIndex;
+  const player = gameState.players[actingIndex];
+  if (!player?.isCPU || player.bankrupt) return;
+
+  gameState.cpuTimer = setTimeout(() => {
+    gameState.cpuTimer = null;
+    runCPUAction();
+  }, CPU_TURN_DELAY);
+}
+
+function shouldCPUBuy(player, prop) {
+  const reserve = Math.max(1500, Math.ceil(prop.price * 0.45));
+  const groupMembers = PROPERTIES.filter(item => item.type === 'LAND' && item.group === prop.group);
+  const groupProgress = groupMembers.filter(item => player.properties.includes(PROPERTIES.indexOf(item))).length;
+  const nearMonopoly = groupMembers.length > 0 && groupProgress >= groupMembers.length - 1;
+  return player.money >= prop.price && (player.money - prop.price >= reserve || nearMonopoly);
+}
+
+function getCPUMaxBid(player, prop) {
+  const reserve = Math.max(1200, Math.ceil(prop.price * 0.35));
+  const budget = Math.max(0, player.money - reserve);
+  const valueCap = Math.ceil((prop.price * 0.72) / 100) * 100;
+  return Math.min(budget - (budget % 100), valueCap);
+}
+
+function chooseCPUCardChoice(card, playerIndex) {
+  const player = gameState.players[playerIndex];
+  const scored = card.choices.map((choice, index) => {
+    const effect = choice.effect || {};
+    let score = 0;
+    if (effect.type === 'money') score = effect.amount;
+    if (effect.type === 'move') score = 260 + Math.max(0, effect.steps || 0) * 45;
+    if (effect.type === 'move_to') score = 340;
+    if (player.money < 1500 && effect.type === 'money') score += 500;
+    return { index, score };
+  });
+  return scored.sort((a, b) => b.score - a.score)[0]?.index ?? 0;
+}
+
+function cpuBuildOne() {
+  const player = getCurrentPlayer();
+  const candidates = getBuildableProperties()
+    .filter(propIndex => {
+      const prop = PROPERTIES[propIndex];
+      const building = gameState.buildings[propIndex] || { houses: 0, hotel: false };
+      const cost = building.houses >= 4 ? prop.hotelCost : prop.houseCost;
+      return player.money - cost >= Math.max(1800, Math.ceil(prop.price * 0.4));
+    })
+    .sort((a, b) => PROPERTIES[a].price - PROPERTIES[b].price);
+  const propIndex = candidates[0];
+  if (propIndex === undefined) return false;
+
+  const prop = PROPERTIES[propIndex];
+  const building = gameState.buildings[propIndex] || { houses: 0, hotel: false };
+  if (building.houses >= 4) {
+    player.money -= prop.hotelCost;
+    building.houses = 0;
+    building.hotel = true;
+    addLog(`${player.name}（CPU）が ${prop.name} にホテルを建設。`, 'build');
+  } else {
+    player.money -= prop.houseCost;
+    building.houses++;
+    addLog(`${player.name}（CPU）が ${prop.name} に家を建設（${building.houses}棟目）。`, 'build');
+  }
+  gameState.buildings[propIndex] = building;
+  renderBuildings(propIndex);
+  renderPlayerList();
+  updatePropertyList();
+  return true;
+}
+
+function runCPUAssetAction() {
+  const management = gameState.assetManagement;
+  const player = management ? gameState.players[management.playerIndex] : null;
+  if (!management || !player?.isCPU) return;
+
+  if (player.money >= CONFIG.bankruptcyThreshold) {
+    onAssetsClose();
+    return;
+  }
+
+  const withBuildings = player.properties.find(propIndex => {
+    const building = gameState.buildings[propIndex];
+    return building?.hotel || building?.houses > 0;
+  });
+  if (withBuildings !== undefined) {
+    sellBuilding(withBuildings);
+    scheduleCPUAction();
+    return;
+  }
+
+  const mortgageCandidate = player.properties
+    .filter(propIndex => !isMortgaged(propIndex))
+    .sort((a, b) => getMortgageValue(PROPERTIES[b]) - getMortgageValue(PROPERTIES[a]))[0];
+  if (mortgageCandidate !== undefined) {
+    mortgageProperty(mortgageCandidate);
+    scheduleCPUAction();
+    return;
+  }
+
+  const saleCandidate = player.properties
+    .sort((a, b) => getSaleValue(PROPERTIES[b], b) - getSaleValue(PROPERTIES[a], a))[0];
+  if (saleCandidate !== undefined) {
+    sellProperty(saleCandidate);
+    scheduleCPUAction();
+    return;
+  }
+
+  onAssetBankrupt();
+}
+
+function runCPUAction() {
+  if (!gameState) return;
+  const actingIndex = gameState.phase === 'auction'
+    ? gameState.auction?.currentBidderIndex
+    : gameState.currentPlayerIndex;
+  const player = gameState.players[actingIndex];
+  if (!player?.isCPU || player.bankrupt) return;
+  closeModal('modal-notify');
+
+  switch (gameState.phase) {
+    case 'roll':
+      onRoll();
+      break;
+    case 'buy': {
+      const prop = PROPERTIES[player.position];
+      closeModal('modal-buy');
+      if (shouldCPUBuy(player, prop)) onBuy();
+      else onSkipBuy();
+      break;
+    }
+    case 'card': {
+      const card = gameState.pendingCard;
+      closeModal('modal-card');
+      if (card?.type === 'choice') onCardChoice(chooseCPUCardChoice(card, gameState.pendingCardPlayer));
+      else onCardOk();
+      break;
+    }
+    case 'auction': {
+      const auction = gameState.auction;
+      if (!auction || auction.currentBidderIndex !== gameState.currentPlayerIndex) return;
+      const prop = PROPERTIES[auction.propertyIndex];
+      const minimum = getMinimumAuctionBid(auction);
+      const maxBid = getCPUMaxBid(player, prop);
+      if (minimum <= maxBid) {
+        document.getElementById('auction-bid-input').value = minimum;
+        onAuctionBid();
+      } else {
+        onAuctionPass();
+      }
+      break;
+    }
+    case 'assets':
+      runCPUAssetAction();
+      break;
+    case 'next':
+    case 'build':
+      cpuBuildOne();
+      onNextTurn();
+      break;
+    default:
+      break;
+  }
 }
 
 // ===== 移動 =====
@@ -1011,6 +1193,7 @@ function renderAuction(message = '') {
     : `所持金が不足しているため入札できません。今回はパスしてください。`;
   messageEl.textContent = message || defaultMessage;
   messageEl.classList.toggle('is-info', !message);
+  scheduleCPUAction();
 }
 
 function onAuctionBid() {
@@ -1439,7 +1622,7 @@ function advanceTurn() {
   gameState.phase = 'roll';
   setPhaseUI();
   updateTurnInfo();
-  addLog(`--- ${gameState.players[nextIdx].name}のターン ---`, 'system');
+  addLog(`--- ${gameState.players[nextIdx].name}${gameState.players[nextIdx].isCPU ? '（CPU）' : ''}のターン ---`, 'system');
 }
 
 // ===== フェーズUI =====
@@ -1459,6 +1642,9 @@ function setPhaseUI() {
   assetsBtn.classList.add('hidden');
   nextBtn.classList.add('hidden');
 
+  const isCPU = getCurrentPlayer()?.isCPU;
+  rollBtn.disabled = (phase !== 'roll') || isCPU;
+
   if (phase === 'next') {
     const player = getCurrentPlayer();
     const buildable = getBuildableProperties();
@@ -1476,8 +1662,16 @@ function setPhaseUI() {
     nextBtn.classList.remove('hidden');
   }
 
+  if (isCPU) {
+    buyBtn.classList.add('hidden');
+    skipBtn.classList.add('hidden');
+    buildBtn.classList.add('hidden');
+    assetsBtn.classList.add('hidden');
+    nextBtn.classList.add('hidden');
+  }
+
   const statusMap = {
-    roll: 'サイコロを振ってください',
+    roll: isCPU ? 'CPUがサイコロを準備しています…' : 'サイコロを振ってください',
     buy: '購入確認中...',
     card: 'カードを確認してください',
     auction: '土地の競売中です',
@@ -1486,6 +1680,7 @@ function setPhaseUI() {
     build: '建設できます（任意）',
   };
   document.getElementById('turn-status').textContent = statusMap[phase] || '';
+  scheduleCPUAction();
 }
 
 // ===== 通知モーダル =====
@@ -1582,8 +1777,134 @@ function calcTotalAssets(playerIndex) {
   return getAssetBreakdown(playerIndex).total;
 }
 
+// ===== ローカル戦績・ランキング =====
+function getLocalStats() {
+  try {
+    const raw = localStorage.getItem(STATS_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    if (parsed && typeof parsed === 'object') {
+      return { players: parsed.players || {}, matches: Array.isArray(parsed.matches) ? parsed.matches : [] };
+    }
+  } catch (error) {
+    console.warn('戦績データを読み込めませんでした。', error);
+  }
+  return { players: {}, matches: [] };
+}
+
+function saveLocalStats(stats) {
+  try {
+    localStorage.setItem(STATS_STORAGE_KEY, JSON.stringify(stats));
+    return true;
+  } catch (error) {
+    console.warn('戦績データを保存できませんでした。', error);
+    return false;
+  }
+}
+
+function getStatsPlayerKey(player) {
+  return `${player.isCPU ? 'cpu' : 'human'}:${player.name}`;
+}
+
+function getModeLabel() {
+  return gameState.turnLimit > 0 ? `${gameState.turnLimit}ターン` : '無制限';
+}
+
+function recordGameStats(ranking, coWinners) {
+  if (!gameState || gameState.statsRecorded) return false;
+  const stats = getLocalStats();
+  const winningKeys = new Set(coWinners.map(getStatsPlayerKey));
+  const recordedAt = Date.now();
+
+  ranking.forEach((player, index) => {
+    const key = getStatsPlayerKey(player);
+    const current = stats.players[key] || {
+      name: player.name,
+      isCPU: Boolean(player.isCPU),
+      games: 0,
+      wins: 0,
+      totalAssets: 0,
+      bestAssets: Number.NEGATIVE_INFINITY,
+      lastPlayedAt: recordedAt,
+    };
+    current.games++;
+    if (winningKeys.has(key)) current.wins++;
+    current.totalAssets += player.totalAssets;
+    current.bestAssets = Math.max(current.bestAssets, player.totalAssets);
+    current.lastPlayedAt = recordedAt;
+    stats.players[key] = current;
+  });
+
+  stats.matches.unshift({
+    id: `${recordedAt}-${Math.random().toString(36).slice(2, 8)}`,
+    recordedAt,
+    mode: getModeLabel(),
+    rounds: Math.min(gameState.turn, gameState.turnLimit || gameState.turn),
+    winnerNames: coWinners.map(player => player.name),
+    participantCount: ranking.length,
+  });
+  stats.matches = stats.matches.slice(0, 20);
+  gameState.statsRecorded = saveLocalStats(stats);
+  return gameState.statsRecorded;
+}
+
+function openRankingModal() {
+  const stats = getLocalStats();
+  const entries = Object.values(stats.players)
+    .map(entry => ({ ...entry, averageAssets: entry.games > 0 ? Math.round(entry.totalAssets / entry.games) : 0 }))
+    .sort((a, b) => (b.wins - a.wins) || (b.averageAssets - a.averageAssets) || (b.games - a.games));
+  const totalMatches = stats.matches.length;
+  const totalParticipants = entries.length;
+  const overview = document.getElementById('stats-overview');
+  const ranking = document.getElementById('stats-ranking');
+  const recent = document.getElementById('stats-recent');
+
+  overview.innerHTML = `
+    <div class="stats-overview-item"><span>対戦記録</span><strong>${totalMatches}戦</strong></div>
+    <div class="stats-overview-item"><span>登録プレイヤー</span><strong>${totalParticipants}人</strong></div>
+    <div class="stats-overview-item"><span>保存先</span><strong>この端末</strong></div>
+  `;
+
+  if (entries.length === 0) {
+    ranking.innerHTML = '<p class="stats-empty">まだ戦績がありません。ゲームを最後までプレイすると、ここに記録されます。</p>';
+  } else {
+    ranking.innerHTML = '<div class="stats-section-title">総合ランキング</div><div class="stats-row is-header"><span>#</span><span>プレイヤー</span><span>勝数</span><span>勝率</span><span>平均資産</span></div>';
+    entries.forEach((entry, index) => {
+      const winRate = entry.games > 0 ? Math.round((entry.wins / entry.games) * 100) : 0;
+      const row = document.createElement('div');
+      row.className = 'stats-row';
+      row.innerHTML = `<span>${index + 1}</span><span class="stats-name">${entry.name}${entry.isCPU ? '<span class="cpu-badge">CPU</span>' : ''}</span><span>${entry.wins}/${entry.games}</span><span>${winRate}%</span><span>${formatMoney(entry.averageAssets)}</span>`;
+      ranking.appendChild(row);
+    });
+  }
+
+  if (stats.matches.length === 0) {
+    recent.innerHTML = '';
+  } else {
+    recent.innerHTML = '<div class="stats-section-title">最近の対戦</div>';
+    stats.matches.slice(0, 5).forEach(match => {
+      const item = document.createElement('div');
+      item.className = 'stats-recent-item';
+      const date = new Date(match.recordedAt).toLocaleDateString('ja-JP');
+      item.textContent = `${date} ｜ ${match.mode} ｜ 勝者：${match.winnerNames.join(' / ')} ｜ ${match.participantCount}人対戦`;
+      recent.appendChild(item);
+    });
+  }
+  openModal('modal-ranking');
+}
+
+function clearLocalStats() {
+  if (!window.confirm('このブラウザに保存された戦績をすべて削除しますか？')) return;
+  try {
+    localStorage.removeItem(STATS_STORAGE_KEY);
+  } catch (error) {
+    console.warn('戦績データを削除できませんでした。', error);
+  }
+  openRankingModal();
+}
+
 // ===== ゲーム終了 =====
 function endGame(reason = gameState.endReason || 'last_standing') {
+  if (gameState.cpuTimer) clearTimeout(gameState.cpuTimer);
   gameState.endReason = reason;
   const ranking = gameState.players
     .map((player, index) => ({ ...player, assets: getAssetBreakdown(index), totalAssets: calcTotalAssets(index) }))
@@ -1604,6 +1925,11 @@ function endGame(reason = gameState.endReason || 'last_standing') {
     ? `🤝 ${coWinners.map(player => player.name).join(' / ')} の同率優勝！`
     : `🏆 ${winner.name} の勝利！`;
 
+  const statsSaved = recordGameStats(ranking, coWinners);
+  document.getElementById('result-stats-note').textContent = statsSaved
+    ? 'この対戦結果を、このブラウザのローカル戦績へ保存しました。'
+    : '戦績はこのブラウザのローカル保存に対応しています。';
+
   const isTurnLimit = reason === 'turn_limit';
   document.getElementById('result-sub').textContent = isTurnLimit
     ? `第${gameState.turnLimit}ラウンド終了時点の総資産評価`
@@ -1623,7 +1949,7 @@ function endGame(reason = gameState.endReason || 'last_standing') {
       <div class="result-rank-num">${medals[index] || (index + 1)}</div>
       <div class="player-dot" style="background:${player.color};width:12px;height:12px;border-radius:50%;flex-shrink:0"></div>
       <div>
-        <div class="result-rank-name">${player.name}${player.bankrupt ? ' 💀' : ''}</div>
+        <div class="result-rank-name">${player.name}${player.isCPU ? '<span class="cpu-badge">CPU</span>' : ''}${player.bankrupt ? ' 💀' : ''}</div>
         <div class="result-rank-details">現金 ${formatMoney(details.cash)} / 土地 ${formatMoney(details.landValue)} / 建物 ${formatMoney(details.buildingValue)}${details.mortgageDebt > 0 ? ` / 抵当 -${formatMoney(details.mortgageDebt)}` : ''}</div>
       </div>
       <div class="result-rank-asset-block"><div class="result-rank-money">総資産: ${formatMoney(player.totalAssets)}</div></div>
