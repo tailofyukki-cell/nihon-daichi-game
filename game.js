@@ -500,8 +500,8 @@ function buildBoard() {
 
   const center = document.createElement('div');
   center.className = 'board-center';
-  center.style.gridColumn = '2 / 16';
-  center.style.gridRow = '2 / 16';
+  center.style.gridColumn = '4 / 14';
+  center.style.gridRow = '4 / 14';
   center.innerHTML = `
     <div class="board-center-logo">🗾</div>
     <div class="board-center-title">日本列島大地主ゲーム</div>

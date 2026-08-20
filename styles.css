@@ -105,8 +105,9 @@ html, body { height: 100%; font-family: 'Segoe UI', 'Hiragino Sans', 'Meiryo', s
 .board {
   display: grid;
   /* 64マス: 各辺16マス（コーナー含む）→ 16列 × 16行 */
-  grid-template-columns: 72px repeat(14, 48px) 72px;
-  grid-template-rows:    72px repeat(14, 48px) 72px;
+  /* 周回マスを大きくし、中央はコンパクトに保つ */
+  grid-template-columns: 88px repeat(14, 60px) 88px;
+  grid-template-rows:    88px repeat(14, 60px) 88px;
   gap: 2px;
   background: #1a2340;
   border: 3px solid rgba(245,166,35,0.4);
@@ -117,8 +118,9 @@ html, body { height: 100%; font-family: 'Segoe UI', 'Hiragino Sans', 'Meiryo', s
 
 /* ボード中央 */
 .board-center {
-  grid-column: 2 / 16;
-  grid-row: 2 / 16;
+  /* 14×14の内側すべてを使わず、中央領域を10×10へ縮小 */
+  grid-column: 4 / 14;
+  grid-row: 4 / 14;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -127,10 +129,10 @@ html, body { height: 100%; font-family: 'Segoe UI', 'Hiragino Sans', 'Meiryo', s
   border-radius: 4px;
   gap: 6px;
 }
-.board-center-logo { font-size: 48px; }
-.board-center-title { font-size: 1.1rem; font-weight: bold; color: #f5a623; }
-.board-center-sub { font-size: 0.75rem; color: #888; }
-.board-center-turn { font-size: 0.85rem; color: #eaeaea; margin-top: 4px; }
+.board-center-logo { font-size: 38px; }
+.board-center-title { font-size: 0.96rem; font-weight: bold; color: #f5a623; }
+.board-center-sub { font-size: 0.66rem; color: #888; }
+.board-center-turn { font-size: 0.74rem; color: #eaeaea; margin-top: 2px; text-align: center; }
 
 /* マスの基本スタイル */
 .cell {
@@ -182,10 +184,10 @@ html, body { height: 100%; font-family: 'Segoe UI', 'Hiragino Sans', 'Meiryo', s
 }
 
 /* マス内テキスト */
-.cell-emoji { font-size: 0.9rem; line-height: 1; }
-.cell-name { font-size: 0.6rem; font-weight: bold; color: #eaeaea; text-align: center; line-height: 1.2; max-width: 100%; overflow: hidden; }
-.cell-price { font-size: 0.55rem; color: #f5a623; }
-.cell-rent-info { font-size: 0.5rem; color: #e74c3c; }
+.cell-emoji { font-size: 1.02rem; line-height: 1; }
+.cell-name { font-size: 0.67rem; font-weight: bold; color: #eaeaea; text-align: center; line-height: 1.2; max-width: 100%; overflow: hidden; }
+.cell-price { font-size: 0.61rem; color: #f5a623; }
+.cell-rent-info { font-size: 0.57rem; color: #e74c3c; }
 .salary-amount { color: #72e8a2; font-weight: 800; text-shadow: 0 0 6px rgba(114,232,162,0.55); }
 
 /* コーナーマスのテキスト */
@@ -259,14 +261,14 @@ html, body { height: 100%; font-family: 'Segoe UI', 'Hiragino Sans', 'Meiryo', s
 /* 辺の方向によるテキスト回転 */
 /* 右辺（col=16）→ テキストを縦書き */
 .cell.side-right { writing-mode: vertical-rl; text-orientation: mixed; }
-.cell.side-right .cell-name { writing-mode: vertical-rl; font-size: 0.55rem; }
-.cell.side-right .cell-price { writing-mode: vertical-rl; font-size: 0.5rem; }
-.cell.side-right .cell-rent-info { writing-mode: vertical-rl; font-size: 0.45rem; }
+.cell.side-right .cell-name { writing-mode: vertical-rl; font-size: 0.64rem; }
+.cell.side-right .cell-price { writing-mode: vertical-rl; font-size: 0.58rem; }
+.cell.side-right .cell-rent-info { writing-mode: vertical-rl; font-size: 0.53rem; }
 /* 左辺（col=1）→ テキストを縦書き（反転） */
 .cell.side-left { writing-mode: vertical-rl; text-orientation: mixed; transform: rotate(180deg); }
-.cell.side-left .cell-name { writing-mode: vertical-rl; font-size: 0.55rem; }
-.cell.side-left .cell-price { writing-mode: vertical-rl; font-size: 0.5rem; }
-.cell.side-left .cell-rent-info { writing-mode: vertical-rl; font-size: 0.45rem; }
+.cell.side-left .cell-name { writing-mode: vertical-rl; font-size: 0.64rem; }
+.cell.side-left .cell-price { writing-mode: vertical-rl; font-size: 0.58rem; }
+.cell.side-left .cell-rent-info { writing-mode: vertical-rl; font-size: 0.53rem; }
 
 /* 右パネル */
 .panel-right { width: 220px; min-width: 220px; background: #0d1526; border-left: 1px solid rgba(255,255,255,0.08); overflow-y: auto; padding: 10px; }
