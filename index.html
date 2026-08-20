@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>日本列島大地主ゲーム</title>
-  <link rel="stylesheet" href="styles.css?v=sound-bgm-1">
+  <link rel="stylesheet" href="styles.css?v=keyboard-controls-1">
 </head>
 <body>
 
@@ -12,6 +12,7 @@
 <div class="sound-controls" role="group" aria-label="サウンド設定">
   <button id="btn-sound-toggle" class="sound-control-btn" type="button" aria-pressed="false" title="効果音とBGMをオン・オフ">🔊 音あり</button>
   <button id="btn-bgm-toggle" class="sound-control-btn" type="button" aria-pressed="true" title="BGMのオン・オフ">🎵 BGM: ON</button>
+  <button id="btn-shortcuts" class="sound-control-btn keyboard-guide-btn" type="button" title="キーボード操作一覧（H または ?）">⌨ 操作</button>
   <label class="volume-control" for="audio-volume">
     <span>音量</span>
     <input id="audio-volume" type="range" min="0" max="100" value="55" aria-label="音量">
@@ -113,17 +114,18 @@
           <div class="die" id="die2">🎲</div>
         </div>
         <div class="dice-total" id="dice-total"></div>
-        <button id="btn-roll" class="btn-roll">🎲 サイコロを振る</button>
+        <button id="btn-roll" class="btn-roll">🎲 サイコロを振る <span class="key-badge">Space / R</span></button>
       </div>
 
       <!-- アクションボタン群 -->
       <div class="action-buttons" id="action-buttons">
-        <button id="btn-buy" class="btn-action btn-buy hidden">🏙️ 土地を購入</button>
-        <button id="btn-skip-buy" class="btn-action btn-skip hidden">スキップ</button>
-        <button id="btn-build" class="btn-action btn-build hidden">🏠 建設する</button>
-        <button id="btn-assets" class="btn-action btn-assets hidden">💼 資産整理</button>
-        <button id="btn-next" class="btn-action btn-next hidden">次のターンへ →</button>
+        <button id="btn-buy" class="btn-action btn-buy hidden">🏙️ 土地を購入 <span class="key-badge">P</span></button>
+        <button id="btn-skip-buy" class="btn-action btn-skip hidden">スキップ <span class="key-badge">S</span></button>
+        <button id="btn-build" class="btn-action btn-build hidden">🏠 建設する <span class="key-badge">B</span></button>
+        <button id="btn-assets" class="btn-action btn-assets hidden">💼 資産整理 <span class="key-badge">A</span></button>
+        <button id="btn-next" class="btn-action btn-next hidden">次のターンへ <span class="key-badge">N</span> →</button>
       </div>
+      <div id="keyboard-context-hint" class="keyboard-context-hint" aria-live="polite">⌨ <kbd>Space</kbd> / <kbd>R</kbd> でサイコロ　<kbd>H</kbd> で操作一覧</div>
 
       <div class="log-panel">
         <div class="panel-header">📜 ログ</div>
@@ -151,6 +153,38 @@
       </div>
     </div>
 
+  </div>
+</div>
+
+<!-- ===== キーボード操作ガイド ===== -->
+<div id="modal-shortcuts" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="shortcuts-title">
+  <div class="modal-content modal-shortcuts-content">
+    <div class="shortcuts-icon">⌨</div>
+    <h3 id="shortcuts-title">キーボード操作</h3>
+    <p class="shortcuts-description">入力欄に文字や入札額を入力しているときは、ゲーム用のショートカットは働きません。</p>
+    <div class="shortcut-groups">
+      <section class="shortcut-group">
+        <h4>基本操作</h4>
+        <div class="shortcut-row"><kbd>Space</kbd><kbd>R</kbd><span>サイコロを振る</span></div>
+        <div class="shortcut-row"><kbd>N</kbd><span>次のターンへ進む</span></div>
+        <div class="shortcut-row"><kbd>H</kbd><kbd>?</kbd><span>この操作一覧を開く</span></div>
+        <div class="shortcut-row"><kbd>Esc</kbd><span>開いている案内・任意モーダルを閉じる</span></div>
+      </section>
+      <section class="shortcut-group">
+        <h4>土地・資産</h4>
+        <div class="shortcut-row"><kbd>P</kbd><span>土地を購入 / 競売でパス</span></div>
+        <div class="shortcut-row"><kbd>S</kbd><span>購入を見送り、競売を開始</span></div>
+        <div class="shortcut-row"><kbd>B</kbd><span>建設画面を開く</span></div>
+        <div class="shortcut-row"><kbd>A</kbd><span>資産整理を開く</span></div>
+      </section>
+      <section class="shortcut-group">
+        <h4>モーダル・競売</h4>
+        <div class="shortcut-row"><kbd>Enter</kbd><span>確認 / 入札を実行</span></div>
+        <div class="shortcut-row"><kbd>1</kbd><kbd>2</kbd><span>旅カードの選択肢を選ぶ</span></div>
+        <div class="shortcut-row"><kbd>↑</kbd><kbd>↓</kbd><span>競売の入札額を100万円ずつ増減</span></div>
+      </section>
+    </div>
+    <button id="btn-shortcuts-close" class="btn-secondary">閉じる <span class="key-badge">Esc</span></button>
   </div>
 </div>
 
@@ -269,6 +303,6 @@
   </div>
 </div>
 
-<script src="game.js?v=sound-bgm-1"></script>
+<script src="game.js?v=keyboard-controls-1"></script>
 </body>
 </html>

@@ -360,7 +360,192 @@ document.addEventListener('DOMContentLoaded', () => {
   CARDS = EMBEDDED_CARDS;
   setupSoundControls();
   initTitleScreen();
+  setupKeyboardControls();
 });
+
+// ===== キーボード操作 =====
+function setupKeyboardControls() {
+  document.getElementById('btn-shortcuts').onclick = openShortcutsModal;
+  document.getElementById('btn-shortcuts-close').onclick = () => closeModal('modal-shortcuts');
+  document.addEventListener('keydown', handleKeyboardShortcut);
+}
+
+function openShortcutsModal() {
+  openModal('modal-shortcuts');
+}
+
+function isTextEntryTarget(target) {
+  return target instanceof HTMLElement && (
+    target.matches('input, textarea, select, [contenteditable="true"]') || target.isContentEditable
+  );
+}
+
+function isModalVisible(id) {
+  const modal = document.getElementById(id);
+  return Boolean(modal && !modal.classList.contains('hidden'));
+}
+
+function clickEnabledButton(id) {
+  const button = document.getElementById(id);
+  if (button && !button.disabled && !button.classList.contains('hidden')) {
+    button.click();
+    return true;
+  }
+  return false;
+}
+
+function adjustAuctionBid(direction) {
+  const input = document.getElementById('auction-bid-input');
+  if (!input || !isModalVisible('modal-auction')) return false;
+  const auction = gameState?.auction;
+  const minimum = auction ? getMinimumAuctionBid(auction) : 100;
+  const current = Number(input.value) || minimum;
+  input.value = Math.max(minimum, current + direction * 100);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  input.focus();
+  return true;
+}
+
+function handleKeyboardShortcut(event) {
+  if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
+  const key = event.key.toLowerCase();
+  const typing = isTextEntryTarget(event.target);
+
+  // 入力欄では通常の文字入力を優先する。競売の上下キーのみ補助する。
+  if (typing) {
+    if (event.target.id === 'auction-bid-input' && event.key === 'ArrowUp') {
+      event.preventDefault();
+      adjustAuctionBid(1);
+    } else if (event.target.id === 'auction-bid-input' && event.key === 'ArrowDown') {
+      event.preventDefault();
+      adjustAuctionBid(-1);
+    } else if (event.target.id === 'auction-bid-input' && key === 'p') {
+      event.preventDefault();
+      onAuctionPass();
+    }
+    return;
+  }
+
+  if ((key === 'h' || event.key === '?') && !isModalVisible('modal-shortcuts')) {
+    event.preventDefault();
+    openShortcutsModal();
+    return;
+  }
+
+  if (isModalVisible('modal-shortcuts')) {
+    if (event.key === 'Escape' || event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      closeModal('modal-shortcuts');
+    }
+    return;
+  }
+
+  if (isModalVisible('modal-notify')) {
+    if (event.key === 'Enter' || event.key === 'Escape' || event.key === ' ') {
+      event.preventDefault();
+      onNotifyOk();
+    }
+    return;
+  }
+
+  if (isModalVisible('modal-card')) {
+    const choices = [...document.querySelectorAll('#card-choice-buttons button:not([disabled])')];
+    if (choices.length && (event.key === '1' || event.key === '2')) {
+      const choice = choices[Number(event.key) - 1];
+      if (choice) {
+        event.preventDefault();
+        choice.click();
+      }
+    } else if (!choices.length && (event.key === 'Enter' || event.key === ' ')) {
+      event.preventDefault();
+      onCardOk();
+    }
+    return;
+  }
+
+  if (isModalVisible('modal-buy')) {
+    if (key === 'p' || event.key === 'Enter') {
+      event.preventDefault();
+      clickEnabledButton('btn-modal-buy');
+    } else if (key === 's' || event.key === 'Escape') {
+      event.preventDefault();
+      onModalSkip();
+    }
+    return;
+  }
+
+  if (isModalVisible('modal-auction')) {
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      adjustAuctionBid(1);
+    } else if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      adjustAuctionBid(-1);
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
+      onAuctionBid();
+    } else if (key === 'p') {
+      event.preventDefault();
+      onAuctionPass();
+    }
+    return;
+  }
+
+  if (isModalVisible('modal-assets')) {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      onAssetsClose();
+    }
+    return;
+  }
+
+  if (isModalVisible('modal-build')) {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeModal('modal-build');
+    }
+    return;
+  }
+
+  if (isModalVisible('modal-ranking')) {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeModal('modal-ranking');
+    }
+    return;
+  }
+
+  const titleActive = document.getElementById('screen-title').classList.contains('active');
+  const resultActive = document.getElementById('screen-result').classList.contains('active');
+  const activeElement = document.activeElement;
+  const hiddenModalFocus = activeElement instanceof HTMLElement && activeElement.closest('.modal.hidden');
+  const neutralFocus = activeElement === document.body || activeElement?.id === 'btn-start' || activeElement?.id === 'btn-restart' || hiddenModalFocus;
+  if (titleActive && event.key === 'Enter' && neutralFocus) {
+    event.preventDefault();
+    startGame();
+    return;
+  }
+  if (resultActive && event.key === 'Enter' && neutralFocus) {
+    event.preventDefault();
+    showScreen('title');
+    return;
+  }
+
+  if (!gameState || getCurrentPlayer()?.isCPU) return;
+  if (gameState.phase === 'roll' && (event.key === ' ' || key === 'r')) {
+    event.preventDefault();
+    onRoll();
+  } else if ((gameState.phase === 'next' || gameState.phase === 'build') && key === 'n') {
+    event.preventDefault();
+    onNextTurn();
+  } else if (gameState.phase === 'next' && key === 'b') {
+    event.preventDefault();
+    clickEnabledButton('btn-build');
+  } else if (gameState.phase === 'next' && key === 'a') {
+    event.preventDefault();
+    clickEnabledButton('btn-assets');
+  }
+}
 
 function initTitleScreen() {
   document.querySelectorAll('.count-btn').forEach(btn => {
@@ -1890,9 +2075,9 @@ function setPhaseUI() {
     if (player.properties.length > 0) assetsBtn.classList.remove('hidden');
     if (buildable.length > 0) {
       buildBtn.classList.remove('hidden');
-      nextBtn.textContent = '建設をスキップして次へ →';
+      nextBtn.innerHTML = '建設をスキップして次へ <span class="key-badge">N</span> →';
     } else {
-      nextBtn.textContent = '次のターンへ →';
+      nextBtn.innerHTML = '次のターンへ <span class="key-badge">N</span> →';
     }
     nextBtn.classList.remove('hidden');
   } else if (phase === 'build') {
@@ -1919,6 +2104,17 @@ function setPhaseUI() {
     build: '建設できます（任意）',
   };
   document.getElementById('turn-status').textContent = statusMap[phase] || '';
+  const keyboardHints = {
+    roll: '⌨ <kbd>Space</kbd> / <kbd>R</kbd> でサイコロ　<kbd>H</kbd> で操作一覧',
+    buy: '⌨ <kbd>P</kbd> で購入　<kbd>S</kbd> で競売へ',
+    card: '⌨ <kbd>Enter</kbd> で確認　選択肢は <kbd>1</kbd> / <kbd>2</kbd>',
+    auction: '⌨ <kbd>↑</kbd> / <kbd>↓</kbd> で入札額調整　<kbd>Enter</kbd> で入札　<kbd>P</kbd> でパス',
+    assets: '⌨ <kbd>Esc</kbd> で閉じる　一覧は <kbd>Tab</kbd> と <kbd>Enter</kbd> で操作',
+    next: '⌨ <kbd>N</kbd> で次のターン　<kbd>B</kbd> で建設　<kbd>A</kbd> で資産整理',
+    build: '⌨ <kbd>N</kbd> で建設をスキップ　<kbd>Esc</kbd> で建設画面を閉じる',
+  };
+  const hint = document.getElementById('keyboard-context-hint');
+  if (hint) hint.innerHTML = keyboardHints[phase] || '⌨ <kbd>H</kbd> で操作一覧';
   scheduleCPUAction();
 }
 
@@ -1941,7 +2137,22 @@ function onNotifyOk() {
 
 // ===== モーダル開閉 =====
 function openModal(id) {
-  document.getElementById(id).classList.remove('hidden');
+  const modal = document.getElementById(id);
+  modal.classList.remove('hidden');
+  requestAnimationFrame(() => {
+    const preferredFocus = {
+      'modal-shortcuts': '#btn-shortcuts-close',
+      'modal-card': '#card-choice-buttons button:not([disabled]), #btn-card-ok:not(.hidden)',
+      'modal-buy': '#btn-modal-buy:not([disabled]), #btn-modal-skip',
+      'modal-auction': '#auction-bid-input, #btn-auction-pass',
+      'modal-assets': '#btn-assets-close',
+      'modal-build': '#btn-build-close',
+      'modal-notify': '#btn-notify-ok',
+      'modal-ranking': '#btn-ranking-close',
+    }[id];
+    const focusTarget = preferredFocus ? modal.querySelector(preferredFocus) : null;
+    focusTarget?.focus();
+  });
 }
 function closeModal(id) {
   document.getElementById(id).classList.add('hidden');
