@@ -153,12 +153,212 @@ let gameState = null;
 let cardDeck = [];
 const STATS_STORAGE_KEY = 'nihonDaichiGameStatsV1';
 const CPU_TURN_DELAY = 480;
+const AUDIO_SETTINGS_KEY = 'nihonDaichiGameAudioV1';
+
+// ===== サウンドエンジン（Web Audio API・外部素材不要） =====
+const soundState = {
+  context: null,
+  masterGain: null,
+  bgmGain: null,
+  muted: false,
+  bgmEnabled: true,
+  volume: 0.55,
+  bgmTimer: null,
+  bgmStarted: false,
+};
+
+function loadSoundSettings() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(AUDIO_SETTINGS_KEY) || '{}');
+    soundState.muted = Boolean(saved.muted);
+    soundState.bgmEnabled = saved.bgmEnabled !== false;
+    soundState.volume = typeof saved.volume === 'number' ? Math.max(0, Math.min(1, saved.volume)) : 0.55;
+  } catch (error) {
+    console.warn('サウンド設定を読み込めませんでした。', error);
+  }
+}
+
+function saveSoundSettings() {
+  try {
+    localStorage.setItem(AUDIO_SETTINGS_KEY, JSON.stringify({
+      muted: soundState.muted,
+      bgmEnabled: soundState.bgmEnabled,
+      volume: soundState.volume,
+    }));
+  } catch (error) {
+    console.warn('サウンド設定を保存できませんでした。', error);
+  }
+}
+
+function getAudioContext() {
+  if (soundState.context) return soundState.context;
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) return null;
+  const context = new AudioContextClass();
+  const masterGain = context.createGain();
+  const bgmGain = context.createGain();
+  masterGain.gain.value = soundState.muted ? 0 : soundState.volume;
+  bgmGain.gain.value = 0.12;
+  bgmGain.connect(masterGain);
+  masterGain.connect(context.destination);
+  soundState.context = context;
+  soundState.masterGain = masterGain;
+  soundState.bgmGain = bgmGain;
+  return context;
+}
+
+function activateAudio() {
+  const context = getAudioContext();
+  if (!context) return false;
+  if (context.state === 'suspended') context.resume().catch(() => {});
+  applySoundSettings();
+  if (soundState.bgmEnabled && !soundState.muted) startBgm();
+  return true;
+}
+
+function applySoundSettings() {
+  const volumePercent = Math.round(soundState.volume * 100);
+  if (soundState.masterGain && soundState.context) {
+    soundState.masterGain.gain.setTargetAtTime(soundState.muted ? 0 : soundState.volume, soundState.context.currentTime, 0.03);
+  }
+  if (soundState.bgmGain && soundState.context) {
+    soundState.bgmGain.gain.setTargetAtTime(soundState.bgmEnabled && !soundState.muted ? 0.12 : 0, soundState.context.currentTime, 0.05);
+  }
+  const soundButton = document.getElementById('btn-sound-toggle');
+  const bgmButton = document.getElementById('btn-bgm-toggle');
+  const volumeInput = document.getElementById('audio-volume');
+  const volumeLabel = document.getElementById('audio-volume-label');
+  if (soundButton) {
+    soundButton.textContent = soundState.muted ? '🔇 ミュート中' : '🔊 音あり';
+    soundButton.classList.toggle('is-muted', soundState.muted);
+    soundButton.setAttribute('aria-pressed', String(!soundState.muted));
+  }
+  if (bgmButton) {
+    bgmButton.textContent = soundState.bgmEnabled ? '🎵 BGM: ON' : '🎵 BGM: OFF';
+    bgmButton.classList.toggle('is-off', !soundState.bgmEnabled);
+    bgmButton.setAttribute('aria-pressed', String(soundState.bgmEnabled));
+  }
+  if (volumeInput) volumeInput.value = String(volumePercent);
+  if (volumeLabel) volumeLabel.textContent = `${volumePercent}%`;
+}
+
+function setupSoundControls() {
+  loadSoundSettings();
+  applySoundSettings();
+  document.getElementById('btn-sound-toggle').addEventListener('click', () => {
+    soundState.muted = !soundState.muted;
+    if (soundState.muted) stopBgm();
+    else activateAudio();
+    applySoundSettings();
+    if (!soundState.muted) playSfx('confirm');
+    saveSoundSettings();
+  });
+  document.getElementById('btn-bgm-toggle').addEventListener('click', () => {
+    soundState.bgmEnabled = !soundState.bgmEnabled;
+    if (soundState.bgmEnabled && !soundState.muted) activateAudio();
+    else stopBgm();
+    applySoundSettings();
+    saveSoundSettings();
+  });
+  document.getElementById('audio-volume').addEventListener('input', (event) => {
+    soundState.volume = Number(event.target.value) / 100;
+    applySoundSettings();
+    saveSoundSettings();
+  });
+}
+
+function createTone(frequency, start, duration, options = {}) {
+  const context = getAudioContext();
+  if (!context || soundState.muted) return;
+  const oscillator = context.createOscillator();
+  const gain = context.createGain();
+  oscillator.type = options.type || 'sine';
+  oscillator.frequency.setValueAtTime(frequency, start);
+  if (options.slideTo) oscillator.frequency.exponentialRampToValueAtTime(Math.max(1, options.slideTo), start + duration);
+  const peak = options.volume ?? 0.055;
+  const attack = Math.min(options.attack ?? 0.015, duration * 0.35);
+  const releaseStart = Math.max(start + attack, start + duration - (options.release ?? 0.08));
+  gain.gain.setValueAtTime(0.0001, start);
+  gain.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak), start + attack);
+  gain.gain.setValueAtTime(Math.max(0.0002, peak), releaseStart);
+  gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+  oscillator.connect(gain);
+  gain.connect(options.destination || soundState.masterGain);
+  oscillator.start(start);
+  oscillator.stop(start + duration + 0.02);
+}
+
+function playSfx(kind) {
+  if (soundState.muted || !activateAudio()) return;
+  const context = soundState.context;
+  const now = context.currentTime + 0.015;
+  const tone = (frequency, offset, duration, options = {}) => createTone(frequency, now + offset, duration, options);
+  const notes = {
+    confirm: () => { tone(660, 0, 0.07, { type: 'sine', volume: 0.035 }); tone(880, 0.075, 0.11, { type: 'sine', volume: 0.04 }); },
+    roll: () => { tone(185, 0, 0.08, { type: 'triangle', slideTo: 150, volume: 0.05 }); tone(230, 0.085, 0.08, { type: 'triangle', slideTo: 185, volume: 0.05 }); tone(290, 0.17, 0.11, { type: 'triangle', slideTo: 230, volume: 0.055 }); },
+    purchase: () => { tone(523.25, 0, 0.10, { type: 'triangle', volume: 0.055 }); tone(659.25, 0.09, 0.12, { type: 'triangle', volume: 0.055 }); tone(783.99, 0.18, 0.20, { type: 'sine', volume: 0.065 }); },
+    rent: () => { tone(370, 0, 0.10, { type: 'sawtooth', slideTo: 300, volume: 0.045 }); tone(294, 0.10, 0.13, { type: 'sawtooth', slideTo: 235, volume: 0.05 }); },
+    salary: () => { tone(523.25, 0, 0.10, { type: 'sine', volume: 0.05 }); tone(659.25, 0.09, 0.10, { type: 'sine', volume: 0.05 }); tone(783.99, 0.18, 0.23, { type: 'sine', volume: 0.06 }); },
+    card: () => { tone(440, 0, 0.08, { type: 'square', volume: 0.028 }); tone(622.25, 0.08, 0.10, { type: 'square', volume: 0.03 }); tone(880, 0.18, 0.16, { type: 'sine', volume: 0.045 }); },
+    tax: () => { tone(260, 0, 0.12, { type: 'triangle', slideTo: 180, volume: 0.055 }); tone(174, 0.13, 0.20, { type: 'sine', volume: 0.055 }); },
+    passStart: () => { tone(587.33, 0, 0.10, { type: 'sine', volume: 0.05 }); tone(739.99, 0.10, 0.12, { type: 'sine', volume: 0.055 }); tone(987.77, 0.21, 0.24, { type: 'sine', volume: 0.06 }); },
+    build: () => { tone(392, 0, 0.08, { type: 'square', volume: 0.03 }); tone(493.88, 0.09, 0.10, { type: 'square', volume: 0.03 }); },
+    bankrupt: () => { tone(247, 0, 0.16, { type: 'sawtooth', slideTo: 160, volume: 0.05 }); tone(147, 0.15, 0.30, { type: 'sine', volume: 0.055 }); },
+    victory: () => { tone(523.25, 0, 0.12, { type: 'triangle', volume: 0.06 }); tone(659.25, 0.12, 0.12, { type: 'triangle', volume: 0.06 }); tone(783.99, 0.24, 0.14, { type: 'triangle', volume: 0.065 }); tone(1046.5, 0.38, 0.45, { type: 'sine', volume: 0.075 }); },
+  };
+  (notes[kind] || notes.confirm)();
+}
+
+function scheduleBgmCycle() {
+  const context = getAudioContext();
+  if (!context || soundState.muted || !soundState.bgmEnabled) return;
+  const beat = 60 / 108;
+  const bar = beat * 4;
+  const start = context.currentTime + 0.06;
+  const chords = [
+    [261.63, 329.63, 392.0],
+    [293.66, 369.99, 440.0],
+    [329.63, 392.0, 493.88],
+    [246.94, 311.13, 392.0],
+  ];
+  const melody = [659.25, 783.99, 880, 783.99, 739.99, 659.25, 587.33, 659.25];
+  chords.forEach((chord, barIndex) => {
+    const barStart = start + barIndex * bar;
+    chord.forEach((note, chordIndex) => createTone(note, barStart, bar * 0.92, {
+      type: chordIndex === 0 ? 'triangle' : 'sine',
+      volume: chordIndex === 0 ? 0.016 : 0.010,
+      attack: 0.03,
+      release: 0.22,
+      destination: soundState.bgmGain,
+    }));
+    createTone(chord[0] / 2, barStart, bar * 0.55, { type: 'sine', volume: 0.020, attack: 0.015, release: 0.14, destination: soundState.bgmGain });
+    createTone(melody[barIndex * 2], barStart + beat, beat * 0.38, { type: 'triangle', volume: 0.028, attack: 0.01, release: 0.06, destination: soundState.bgmGain });
+    createTone(melody[barIndex * 2 + 1], barStart + beat * 2.5, beat * 0.42, { type: 'triangle', volume: 0.028, attack: 0.01, release: 0.07, destination: soundState.bgmGain });
+  });
+}
+
+function startBgm() {
+  if (soundState.bgmStarted || soundState.muted || !soundState.bgmEnabled) return;
+  const context = getAudioContext();
+  if (!context) return;
+  soundState.bgmStarted = true;
+  scheduleBgmCycle();
+  const cycleMs = (60 / 108) * 4 * 4 * 1000;
+  soundState.bgmTimer = window.setInterval(scheduleBgmCycle, cycleMs);
+}
+
+function stopBgm() {
+  if (soundState.bgmTimer) window.clearInterval(soundState.bgmTimer);
+  soundState.bgmTimer = null;
+  soundState.bgmStarted = false;
+}
 
 // ===== 初期化（fetch不要・即時ロード） =====
 document.addEventListener('DOMContentLoaded', () => {
   CONFIG = EMBEDDED_CONFIG;
   PROPERTIES = EMBEDDED_PROPERTIES;
   CARDS = EMBEDDED_CARDS;
+  setupSoundControls();
   initTitleScreen();
 });
 
@@ -258,6 +458,8 @@ function startGame() {
   setupGameButtons();
   setPhaseUI();
   showScreen('game');
+  activateAudio();
+  playSfx('confirm');
   addLog('ゲーム開始！ 各プレイヤーの初期所持金：' + formatMoney(CONFIG.initialMoney), 'system');
   const cpuCount = players.filter(player => player.isCPU).length;
   addLog(`${players.length}人で対戦${cpuCount > 0 ? `（CPU ${cpuCount}人）` : ''}`, 'system');
@@ -535,6 +737,7 @@ function onRoll() {
   document.getElementById('dice-total').textContent = `${d1} + ${d2} = ${d1 + d2}`;
 
   addLog(`${p.name} がサイコロを振った → ${d1}+${d2}=${d1+d2}`, 'system');
+  playSfx('roll');
   movePlayer(gameState.currentPlayerIndex, d1 + d2);
 }
 
@@ -606,10 +809,12 @@ function cpuBuildOne() {
     player.money -= prop.hotelCost;
     building.houses = 0;
     building.hotel = true;
+    playSfx('build');
     addLog(`${player.name}（CPU）が ${prop.name} にホテルを建設。`, 'build');
   } else {
     player.money -= prop.houseCost;
     building.houses++;
+    playSfx('build');
     addLog(`${player.name}（CPU）が ${prop.name} に家を建設（${building.houses}棟目）。`, 'build');
   }
   gameState.buildings[propIndex] = building;
@@ -723,6 +928,7 @@ function movePlayer(playerIndex, steps) {
   if (newPos < oldPos || (oldPos + steps) >= total) {
     p.money += CONFIG.startBonus;
     addLog(`${p.name} がスタートを通過！ +${formatMoney(CONFIG.startBonus)}`, 'system');
+    playSfx('passStart');
   }
 
   p.position = newPos;
@@ -822,6 +1028,7 @@ function processLand(playerIndex, cellIndex) {
     const rent = boosted ? baseRent * 2 : baseRent;
     p.money -= rent;
     owner.money += rent;
+    playSfx('rent');
     if (boosted) owner.tollBoosts--;
     addLog(`${p.name} が${owner.name}の${prop.name}に止まり、通行料 ${formatMoney(rent)} を支払った。${boosted ? ' メディア紹介効果で2倍！' : ''}`, 'rent');
     renderPlayerList();
@@ -840,6 +1047,7 @@ function processCard(playerIndex) {
   setPhaseUI();
   renderCardModal(card);
   openModal('modal-card');
+  playSfx('card');
   addLog(`${gameState.players[playerIndex].name} が旅カードを引いた：「${card.title}」`, 'card');
 }
 
@@ -890,6 +1098,7 @@ function moveByCard(playerIndex, targetIndex) {
   if (targetIndex < player.position) {
     player.money += CONFIG.startBonus;
     addLog(`${player.name} がスタートを通過！ +${formatMoney(CONFIG.startBonus)}`, 'system');
+    playSfx('passStart');
   }
   player.position = targetIndex;
   renderTokens();
@@ -1035,6 +1244,7 @@ function onCardOk() {
 function processSalary(playerIndex, prop) {
   const p = gameState.players[playerIndex];
   p.money += prop.amount;
+  playSfx('salary');
   addLog(`${p.name} が${prop.name}で ${formatMoney(prop.amount)} を受け取った！`, 'salary');
   renderPlayerList();
   updateTurnInfo();
@@ -1046,6 +1256,7 @@ function processSalary(playerIndex, prop) {
 function processTax(playerIndex, prop) {
   const p = gameState.players[playerIndex];
   p.money -= prop.amount;
+  playSfx('tax');
   addLog(`${p.name} が${prop.name}マスで ${formatMoney(prop.amount)} を支払った。`, 'tax');
   renderPlayerList();
   if (checkBankruptcy(playerIndex)) return;
@@ -1124,6 +1335,7 @@ function onBuy() {
   }
 
   p.money -= prop.price;
+  playSfx('purchase');
   assignLandToPlayer(gameState.currentPlayerIndex, cellIndex);
   addLog(`${p.name} が ${prop.name} を ${formatMoney(prop.price)} で購入！`, 'buy');
   renderPlayerList();
@@ -1389,6 +1601,7 @@ function buildHouse(propIdx) {
 
   p.money -= prop.houseCost;
   b.houses++;
+  playSfx('build');
   addLog(`${p.name} が ${prop.name} に家を建設（${b.houses}棟目）。コスト: ${formatMoney(prop.houseCost)}`, 'build');
   renderBuildings(propIdx);
   renderPlayerList();
@@ -1407,6 +1620,7 @@ function buildHotel(propIdx) {
   p.money -= prop.hotelCost;
   b.houses = 0;
   b.hotel = true;
+  playSfx('build');
   addLog(`${p.name} が ${prop.name} にホテルを建設！コスト: ${formatMoney(prop.hotelCost)}`, 'build');
   renderBuildings(propIdx);
   renderPlayerList();
@@ -1754,6 +1968,7 @@ function declareBankruptcy(playerIndex) {
   if (!player || player.bankrupt) return;
 
   player.bankrupt = true;
+  playSfx('bankrupt');
   addLog(`${player.name} が破産しました。所有地は銀行へ返却されます。`, 'bankrupt');
   player.properties.forEach(propIndex => {
     delete gameState.landOwners[propIndex];
@@ -1983,6 +2198,7 @@ function endGame(reason = gameState.endReason || 'last_standing') {
   });
 
   showScreen('result');
+  playSfx('victory');
 }
 
 // ===== 所有地一覧更新 =====

@@ -4,9 +4,20 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>日本列島大地主ゲーム</title>
-  <link rel="stylesheet" href="styles.css?v=income-visibility-1">
+  <link rel="stylesheet" href="styles.css?v=sound-bgm-1">
 </head>
 <body>
+
+<!-- ===== サウンド設定 ===== -->
+<div class="sound-controls" role="group" aria-label="サウンド設定">
+  <button id="btn-sound-toggle" class="sound-control-btn" type="button" aria-pressed="false" title="効果音とBGMをオン・オフ">🔊 音あり</button>
+  <button id="btn-bgm-toggle" class="sound-control-btn" type="button" aria-pressed="true" title="BGMのオン・オフ">🎵 BGM: ON</button>
+  <label class="volume-control" for="audio-volume">
+    <span>音量</span>
+    <input id="audio-volume" type="range" min="0" max="100" value="55" aria-label="音量">
+    <output id="audio-volume-label" for="audio-volume">55%</output>
+  </label>
+</div>
 
 <!-- ===== タイトル画面 ===== -->
 <div id="screen-title" class="screen active">
@@ -258,6 +269,6 @@
   </div>
 </div>
 
-<script src="game.js?v=income-visibility-1"></script>
+<script src="game.js?v=sound-bgm-1"></script>
 </body>
 </html>

@@ -625,3 +625,51 @@ html, body { height: 100%; font-family: 'Segoe UI', 'Hiragino Sans', 'Meiryo', s
   .stats-row { grid-template-columns: 27px minmax(75px, 1fr) 48px 50px 68px; gap: 4px; font-size: 0.68rem; }
   .stats-overview-item { padding: 8px 4px; }
 }
+
+/* ===== サウンド設定 ===== */
+.sound-controls {
+  position: fixed;
+  top: 10px;
+  right: 12px;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid rgba(245,166,35,0.34);
+  border-radius: 10px;
+  background: rgba(9, 17, 34, 0.92);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.28);
+  backdrop-filter: blur(8px);
+}
+.sound-control-btn {
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 7px;
+  padding: 5px 7px;
+  color: #e8eefb;
+  background: rgba(255,255,255,0.06);
+  font-size: 0.69rem;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.sound-control-btn:hover { border-color: #f5a623; background: rgba(245,166,35,0.14); }
+.sound-control-btn.is-muted { color: #ff9c9c; border-color: rgba(231,76,60,0.48); }
+.sound-control-btn.is-off { color: #9ba8bd; }
+.volume-control {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #b8c2d8;
+  font-size: 0.66rem;
+  font-weight: 700;
+}
+.volume-control input { width: 68px; accent-color: #f5a623; cursor: pointer; }
+.volume-control output { min-width: 28px; color: #f6cf74; font-variant-numeric: tabular-nums; }
+@media (max-width: 720px) {
+  .sound-controls { top: 5px; right: 5px; gap: 4px; padding: 4px; }
+  .sound-control-btn { padding: 4px 5px; font-size: 0.58rem; }
+  .volume-control span { display: none; }
+  .volume-control input { width: 45px; }
+  .volume-control output { display: none; }
+}
