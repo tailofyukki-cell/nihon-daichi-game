@@ -776,3 +776,155 @@ select:focus-visible { outline: 3px solid rgba(245, 193, 82, 0.95); outline-offs
     box-shadow: inset 0 0 20px rgba(255, 111, 48, 0.14);
   }
 }
+
+/* ===== スマホ最適化：盤面優先レイアウト ===== */
+.mobile-game-tabs { display: none; }
+
+@media (max-width: 760px) {
+  html, body { overflow: hidden; }
+  #screen-game { height: 100dvh; min-height: 100dvh; overflow: hidden; }
+  .game-layout { position: relative; display: block; height: 100%; width: 100%; overflow: hidden; background: #0a0e1a; }
+
+  /* 盤面は常に全面へ表示し、横スクロールで全周を確認できる */
+  .panel-center {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 62px 0 57px;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    background: #0a0e1a;
+  }
+  .board-wrapper { width: max-content; min-width: max-content; padding: 0; }
+  .board {
+    /* 360px幅でも盤面全体が収まる寸法 */
+    grid-template-columns: 34px repeat(14, 19px) 34px;
+    grid-template-rows: 34px repeat(14, 19px) 34px;
+    gap: 1px;
+    padding: 3px;
+    border-width: 2px;
+  }
+  .board-center { grid-column: 4 / 14; grid-row: 4 / 14; gap: 3px; }
+  .board-center-logo { font-size: 24px; }
+  .board-center-title { font-size: 0.55rem; }
+  .board-center-sub { display: none; }
+  .board-center-turn { font-size: 0.4rem; max-width: 170px; line-height: 1.35; }
+
+  .cell-group-bar { height: 3px; }
+  .cell-emoji { font-size: 0.62rem; }
+  .cell-name { font-size: 0.4rem; line-height: 1.02; }
+  .cell-price { font-size: 0.37rem; }
+  .cell-rent-info { display: none; }
+  .cell.corner .cell-emoji { font-size: 0.86rem; }
+  .cell.corner .cell-name { font-size: 0.42rem; }
+  .cell.side-right .cell-name, .cell.side-left .cell-name { font-size: 0.38rem; }
+  .cell.side-right .cell-price, .cell.side-left .cell-price { font-size: 0.35rem; }
+  .house-icon { font-size: 0.38rem; }
+  .hotel-icon { font-size: 0.48rem; }
+  .cell-tokens { right: 1px; bottom: 1px; gap: 1px; max-width: 38px; }
+  .token { width: 13px; height: 13px; border-width: 1px; font-size: 0.42rem; }
+  .token.current-token { width: 20px; height: 20px; border-width: 2px; font-size: 0.62rem; }
+  .current-location-tag { top: 0; padding: 0 2px; font-size: 0.28rem; }
+  .cell.side-right .current-location-tag, .cell.side-left .current-location-tag { top: 7px; }
+
+  /* 左右の情報は盤面の上へ重ねず、必要なタブだけを下部シートとして表示 */
+  .panel-left, .panel-right {
+    display: none;
+    position: absolute;
+    z-index: 30;
+    left: 0;
+    right: 0;
+    bottom: 57px;
+    width: auto;
+    min-width: 0;
+    max-height: min(46dvh, 410px);
+    padding: 12px 14px;
+    overflow-y: auto;
+    border: 1px solid rgba(245,166,35,0.42);
+    border-left: 0;
+    border-right: 0;
+    border-radius: 16px 16px 0 0;
+    background: rgba(10, 18, 35, 0.97);
+    box-shadow: 0 -12px 30px rgba(0,0,0,0.42);
+    -webkit-overflow-scrolling: touch;
+  }
+  .mobile-view-turn .panel-left,
+  .mobile-view-players .panel-left,
+  .mobile-view-log .panel-left,
+  .mobile-view-info .panel-right { display: flex; flex-direction: column; }
+
+  .mobile-view-turn .panel-left > .panel-header,
+  .mobile-view-turn #player-list,
+  .mobile-view-turn .log-panel { display: none; }
+  .mobile-view-turn .turn-info,
+  .mobile-view-turn .dice-area,
+  .mobile-view-turn .action-buttons,
+  .mobile-view-turn .keyboard-context-hint { flex-shrink: 0; }
+
+  .mobile-view-players .panel-left > :not(.panel-header):not(#player-list) { display: none; }
+  .mobile-view-players #player-list { display: flex; flex-direction: column; gap: 7px; }
+
+  .mobile-view-log .panel-left > :not(.log-panel) { display: none; }
+  .mobile-view-log .log-panel { display: flex; min-height: 290px; }
+  .mobile-view-log .game-log { font-size: 0.8rem; }
+
+  .mobile-view-info .panel-right { max-height: min(52dvh, 470px); }
+  .mobile-view-info .cell-info { min-height: 0; }
+  .mobile-view-info .property-list { padding-bottom: 4px; }
+
+  /* 下部タブは常に表示し、ワンタップで必要な情報だけを出す */
+  .mobile-game-tabs {
+    position: absolute;
+    z-index: 45;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 57px;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 1px;
+    padding: 5px 6px calc(5px + env(safe-area-inset-bottom));
+    background: rgba(8, 14, 27, 0.98);
+    border-top: 1px solid rgba(245,166,35,0.32);
+  }
+  .mobile-tab {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    border: 0;
+    border-radius: 8px;
+    color: #aab4c8;
+    background: transparent;
+    font-size: 0.92rem;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .mobile-tab span { font-size: 0.56rem; font-weight: 700; }
+  .mobile-tab.active { color: #1d1606; background: #f5a623; box-shadow: 0 0 12px rgba(245,166,35,0.35); }
+  .mobile-tab:focus-visible { outline: 2px solid #fff2a4; outline-offset: -2px; }
+
+  /* 上部サウンド操作は盤面を遮らないコンパクト表示にする */
+  .sound-controls {
+    z-index: 70;
+    top: 7px;
+    left: 7px;
+    right: 7px;
+    width: auto;
+    justify-content: center;
+    gap: 3px;
+    padding: 5px;
+    border-radius: 11px;
+  }
+  .sound-control-btn { padding: 5px 6px; font-size: 0.64rem; }
+  .volume-control { gap: 3px; font-size: 0; }
+  .volume-control span, .volume-control output { display: none; }
+  .volume-control input { width: 62px; }
+
+  .modal-content { max-width: calc(100vw - 28px); }
+}

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>日本列島大地主ゲーム</title>
-  <link rel="stylesheet" href="styles.css?v=endgame-events-1">
+  <link rel="stylesheet" href="styles.css?v=mobile-responsive-1">
 </head>
 <body>
 
@@ -154,6 +154,15 @@
     </div>
 
   </div>
+
+  <!-- スマホ専用：盤面を優先し、補助情報は下部タブで切り替える -->
+  <nav class="mobile-game-tabs" aria-label="ゲーム画面の表示切替">
+    <button type="button" class="mobile-tab active" data-mobile-view="board">🗾<span>盤面</span></button>
+    <button type="button" class="mobile-tab" data-mobile-view="turn">🎲<span>操作</span></button>
+    <button type="button" class="mobile-tab" data-mobile-view="players">👥<span>プレイヤー</span></button>
+    <button type="button" class="mobile-tab" data-mobile-view="info">ℹ️<span>情報</span></button>
+    <button type="button" class="mobile-tab" data-mobile-view="log">📜<span>ログ</span></button>
+  </nav>
 </div>
 
 <!-- ===== キーボード操作ガイド ===== -->
@@ -304,6 +313,6 @@
   </div>
 </div>
 
-<script src="game.js?v=endgame-events-1"></script>
+<script src="game.js?v=mobile-responsive-1"></script>
 </body>
 </html>

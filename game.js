@@ -379,6 +379,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupSoundControls();
   initTitleScreen();
   setupKeyboardControls();
+  setupMobileGameTabs();
 });
 
 // ===== キーボード操作 =====
@@ -386,6 +387,27 @@ function setupKeyboardControls() {
   document.getElementById('btn-shortcuts').onclick = openShortcutsModal;
   document.getElementById('btn-shortcuts-close').onclick = () => closeModal('modal-shortcuts');
   document.addEventListener('keydown', handleKeyboardShortcut);
+}
+
+function setupMobileGameTabs() {
+  document.querySelectorAll('.mobile-tab').forEach(button => {
+    button.addEventListener('click', () => setMobileGameView(button.dataset.mobileView));
+  });
+  setMobileGameView('board');
+}
+
+function setMobileGameView(view = 'board') {
+  const layout = document.querySelector('.game-layout');
+  if (!layout) return;
+  const validViews = ['board', 'turn', 'players', 'info', 'log'];
+  const selectedView = validViews.includes(view) ? view : 'board';
+  layout.classList.remove(...validViews.map(item => `mobile-view-${item}`));
+  layout.classList.add(`mobile-view-${selectedView}`);
+  document.querySelectorAll('.mobile-tab').forEach(button => {
+    const active = button.dataset.mobileView === selectedView;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', String(active));
+  });
 }
 
 function openShortcutsModal() {
@@ -663,6 +685,7 @@ function startGame() {
   setupGameButtons();
   setPhaseUI();
   showScreen('game');
+  setMobileGameView('board');
   activateAudio();
   playSfx('confirm');
   addLog('ゲーム開始！ 各プレイヤーの初期所持金：' + formatMoney(CONFIG.initialMoney), 'system');
@@ -840,7 +863,10 @@ function createCellElement(prop, index, row, col) {
   tokens.id = `tokens-${index}`;
   cell.appendChild(tokens);
 
-  cell.addEventListener('click', () => showCellInfo(index));
+  cell.addEventListener('click', () => {
+    showCellInfo(index);
+    if (window.matchMedia('(max-width: 760px)').matches) setMobileGameView('info');
+  });
 
   return cell;
 }
