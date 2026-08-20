@@ -4,7 +4,7 @@ const EMBEDDED_CONFIG = {
   "gameName": "日本列島大地主ゲーム",
   "subtitle": "～ 47都道府県 地名争奪バトル ～",
   "initialMoney": 15000,
-  "startBonus": 2000,
+  "startBonus": 3000,
   "maxPlayers": 4,
   "minPlayers": 2,
   "diceCount": 2,
@@ -44,7 +44,7 @@ const EMBEDDED_PROPERTIES = [
   { "id": 11, "type": "LAND",    "name": "福岡",         "group": "kyushu_okinawa", "price": 1400, "rent": [100, 500, 1500, 4500, 6250, 7500], "houseCost": 1000, "hotelCost": 1000 },
   { "id": 12, "type": "LAND",    "name": "高知",         "group": "shikoku",        "price": 1400, "rent": [100, 500, 1500, 4500, 6250, 7500], "houseCost": 1000, "hotelCost": 1000 },
   { "id": 13, "type": "LAND",    "name": "愛媛",         "group": "shikoku",        "price": 1600, "rent": [120, 600, 1800, 5000, 7000, 9000], "houseCost": 1000, "hotelCost": 1000 },
-  { "id": 14, "type": "REST",    "name": "道の駅",       "group": null },
+  { "id": 14, "type": "SALARY",  "name": "地域振興給料日", "group": null, "amount": 800 },
   { "id": 15, "type": "LAND",    "name": "徳島",         "group": "shikoku",        "price": 1600, "rent": [120, 600, 1800, 5000, 7000, 9000], "houseCost": 1000, "hotelCost": 1000 },
   { "id": 16, "type": "LAND",    "name": "香川",         "group": "shikoku",        "price": 1800, "rent": [140, 700, 2000, 5500, 7500, 9500], "houseCost": 1000, "hotelCost": 1000 },
   { "id": 17, "type": "CARD",    "name": "旅カード",     "group": null },
@@ -61,7 +61,7 @@ const EMBEDDED_PROPERTIES = [
   { "id": 28, "type": "LAND",    "name": "京都",         "group": "kinki",          "price": 2600, "rent": [220, 1100, 3300, 8000, 9750, 11000], "houseCost": 1500, "hotelCost": 1500 },
   { "id": 29, "type": "LAND",    "name": "奈良",         "group": "kinki",          "price": 2600, "rent": [220, 1100, 3300, 8000, 9750, 11000], "houseCost": 1500, "hotelCost": 1500 },
   { "id": 30, "type": "LAND",    "name": "和歌山",       "group": "kinki",          "price": 2800, "rent": [240, 1200, 3600, 10000, 12000, 14000], "houseCost": 1500, "hotelCost": 1500 },
-  { "id": 31, "type": "REST",    "name": "温泉宿",       "group": null },
+  { "id": 31, "type": "SALARY",  "name": "観光収益給料日", "group": null, "amount": 1000 },
   { "id": 32, "type": "LAND",    "name": "三重",         "group": "kinki",          "price": 2800, "rent": [240, 1200, 3600, 10000, 12000, 14000], "houseCost": 1500, "hotelCost": 1500 },
   { "id": 33, "type": "LAND",    "name": "滋賀",         "group": "kinki",          "price": 3000, "rent": [260, 1300, 3900, 11000, 12750, 15000], "houseCost": 1500, "hotelCost": 1500 },
   { "id": 34, "type": "LAND",    "name": "愛知",         "group": "chubu",          "price": 3000, "rent": [260, 1300, 3900, 11000, 12750, 15000], "houseCost": 1500, "hotelCost": 1500 },
@@ -81,7 +81,7 @@ const EMBEDDED_PROPERTIES = [
   { "id": 48, "type": "LAND",    "name": "茨城",         "group": "kanto",          "price": 2200, "rent": [180, 900, 2500, 7000, 8750, 10500], "houseCost": 1500, "hotelCost": 1500 },
   { "id": 49, "type": "LAND",    "name": "栃木",         "group": "kanto",          "price": 2200, "rent": [180, 900, 2500, 7000, 8750, 10500], "houseCost": 1500, "hotelCost": 1500 },
   { "id": 50, "type": "LAND",    "name": "群馬",         "group": "kanto",          "price": 2200, "rent": [180, 900, 2500, 7000, 8750, 10500], "houseCost": 1500, "hotelCost": 1500 },
-  { "id": 51, "type": "REST",    "name": "道の駅",       "group": null },
+  { "id": 51, "type": "SALARY",  "name": "ふるさと給料日", "group": null, "amount": 800 },
   { "id": 52, "type": "LAND",    "name": "新潟",         "group": "tohoku_hokuriku","price": 2000, "rent": [160, 800, 2200, 6000, 8000, 10000], "houseCost": 1000, "hotelCost": 1000 },
   { "id": 53, "type": "LAND",    "name": "福島",         "group": "tohoku_hokuriku","price": 2000, "rent": [160, 800, 2200, 6000, 8000, 10000], "houseCost": 1000, "hotelCost": 1000 },
   { "id": 54, "type": "CARD",    "name": "旅カード",     "group": null },
@@ -355,11 +355,11 @@ function createCellElement(prop, index, row, col) {
     price.className = 'cell-price';
     price.textContent = `¥${prop.price}`;
     cell.appendChild(price);
-  } else if (prop.type === 'TAX') {
-    const tax = document.createElement('div');
-    tax.className = 'cell-rent-info';
-    tax.textContent = `-¥${prop.amount}`;
-    cell.appendChild(tax);
+  } else if (prop.type === 'TAX' || prop.type === 'SALARY') {
+    const amount = document.createElement('div');
+    amount.className = `cell-rent-info ${prop.type === 'SALARY' ? 'salary-amount' : ''}`;
+    amount.textContent = `${prop.type === 'SALARY' ? '+' : '-'}¥${prop.amount}`;
+    cell.appendChild(amount);
   }
 
   const buildings = document.createElement('div');
@@ -378,22 +378,32 @@ function createCellElement(prop, index, row, col) {
 }
 
 function getCellEmoji(type) {
-  const map = { START: '🟢', LAND: '🏙️', CARD: '🎴', TAX: '🧾', REST: '😌', TRANSIT: '🚅' };
+  const map = { START: '🟢', LAND: '🏙️', CARD: '🎴', TAX: '🧾', SALARY: '💴', REST: '😌', TRANSIT: '🚅' };
   return map[type] || '❓';
 }
 
 // ===== コマ描画 =====
 function renderTokens() {
   document.querySelectorAll('.cell-tokens').forEach(t => t.innerHTML = '');
-  gameState.players.forEach(player => {
+  document.querySelectorAll('.current-location-tag').forEach(tag => tag.remove());
+  gameState.players.forEach((player, playerIndex) => {
     if (player.bankrupt) return;
     const tokensEl = document.getElementById(`tokens-${player.position}`);
     if (!tokensEl) return;
+    const isCurrent = playerIndex === gameState.currentPlayerIndex;
     const token = document.createElement('div');
-    token.className = 'token';
+    token.className = `token${isCurrent ? ' current-token' : ''}`;
     token.style.background = player.color;
     token.textContent = player.emoji;
+    token.title = `${player.name}${isCurrent ? '（現在の手番）' : ''}`;
     tokensEl.appendChild(token);
+
+    if (isCurrent) {
+      const tag = document.createElement('div');
+      tag.className = 'current-location-tag';
+      tag.textContent = '▼ 現在地';
+      tokensEl.parentElement.appendChild(tag);
+    }
   });
 }
 
@@ -470,6 +480,7 @@ function updateTurnInfo() {
   document.querySelectorAll('.player-card').forEach((c, i) => {
     c.classList.toggle('active', i === gameState.currentPlayerIndex);
   });
+  renderTokens();
 }
 
 // ===== ゲームボタン設定 =====
@@ -755,6 +766,9 @@ function processCell(playerIndex, cellIndex) {
     case 'TAX':
       processTax(playerIndex, prop);
       break;
+    case 'SALARY':
+      processSalary(playerIndex, prop);
+      break;
     case 'REST':
       addLog(`${p.name} が${prop.name}で休憩。`, 'system');
       showNotify('休憩', `${prop.name}でひと休み。何も起こりません。`, '😌');
@@ -1016,6 +1030,17 @@ function onCardOk() {
   if (!card || playerIndex === undefined) return;
   closeModal('modal-card');
   resolveCardEffect(card, playerIndex);
+}
+
+function processSalary(playerIndex, prop) {
+  const p = gameState.players[playerIndex];
+  p.money += prop.amount;
+  addLog(`${p.name} が${prop.name}で ${formatMoney(prop.amount)} を受け取った！`, 'salary');
+  renderPlayerList();
+  updateTurnInfo();
+  showNotify('給料日！', `${prop.name}に止まりました。\n${formatMoney(prop.amount)} を受け取ります。`, '💴');
+  gameState.phase = 'next';
+  setPhaseUI();
 }
 
 function processTax(playerIndex, prop) {
@@ -1998,9 +2023,15 @@ function showCellInfo(index) {
   const owner = ownerIdx !== undefined ? gameState.players[ownerIdx] : null;
   const b = gameState.buildings[index];
 
-  const typeNames = { START: 'スタート', LAND: '土地', CARD: '旅カード', TAX: '税金', REST: '休憩', TRANSIT: '交通拠点' };
+  const typeNames = { START: 'スタート', LAND: '土地', CARD: '旅カード', TAX: '税金', SALARY: '給料日', REST: '休憩', TRANSIT: '交通拠点' };
 
-  if (prop.type === 'LAND') {
+  if (prop.type === 'SALARY') {
+    el.innerHTML = `
+      <div class="cell-info-name">${prop.name}</div>
+      <div class="cell-info-type">${typeNames[prop.type]}</div>
+      <div class="salary-info-box">💴 停止すると <strong>${formatMoney(prop.amount)}</strong> を受け取ります。</div>
+    `;
+  } else if (prop.type === 'LAND') {
     const rent = calcRent(index);
     const mortgaged = isMortgaged(index);
     const bldStr = b ? (b.hotel ? '🏨ホテル' : b.houses > 0 ? `🏠×${b.houses}` : 'なし') : 'なし';
