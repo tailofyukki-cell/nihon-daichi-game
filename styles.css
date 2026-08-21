@@ -179,9 +179,38 @@ html, body { height: 100%; font-family: 'Segoe UI', 'Hiragino Sans', 'Meiryo', s
 .cell-owner-overlay {
   position: absolute;
   inset: 0;
-  opacity: 0.12;
+  opacity: 0.14;
   pointer-events: none;
 }
+.cell.is-owned { border-color: rgba(255,255,255,0.48); }
+.cell-owner-badge {
+  position: absolute;
+  left: 2px;
+  bottom: 2px;
+  z-index: 7;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  max-width: calc(100% - 4px);
+  min-height: 14px;
+  padding: 1px 4px 1px 2px;
+  border: 1px solid rgba(255,255,255,0.82);
+  border-radius: 999px;
+  color: #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.68);
+  font-size: 0.46rem;
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+  writing-mode: horizontal-tb;
+  text-orientation: mixed;
+}
+.cell-owner-badge.hidden { display: none; }
+.cell-owner-icon { flex: 0 0 auto; font-size: 0.56rem; line-height: 1; }
+.cell-owner-name { overflow: hidden; text-overflow: ellipsis; }
+.cell.side-right .cell-owner-badge { writing-mode: horizontal-tb; transform: none; }
+.cell.side-left .cell-owner-badge { writing-mode: horizontal-tb; transform: rotate(180deg); }
 
 /* マス内テキスト */
 .cell-emoji { font-size: 1.02rem; line-height: 1; }
@@ -824,6 +853,22 @@ select:focus-visible { outline: 3px solid rgba(245, 193, 82, 0.95); outline-offs
   .cell.side-right .cell-price, .cell.side-left .cell-price { font-size: 0.35rem; }
   .house-icon { font-size: 0.38rem; }
   .hotel-icon { font-size: 0.48rem; }
+  /* 小さな盤面では、色とキャラクターで所有者を識別する */
+  .cell-owner-badge {
+    left: 1px;
+    bottom: 1px;
+    min-width: 10px;
+    min-height: 10px;
+    width: 10px;
+    height: 10px;
+    padding: 0;
+    justify-content: center;
+    border-width: 1px;
+    border-radius: 50%;
+  }
+  .cell-owner-icon { font-size: 0.36rem; }
+  .cell-owner-name { display: none; }
+  .cell.side-left .cell-owner-badge { transform: rotate(180deg); }
   .cell-tokens { right: 1px; bottom: 1px; gap: 1px; max-width: 38px; }
   .token { width: 13px; height: 13px; border-width: 1px; font-size: 0.42rem; }
   .token.current-token { width: 20px; height: 20px; border-width: 2px; font-size: 0.62rem; }

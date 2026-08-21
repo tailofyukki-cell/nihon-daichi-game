@@ -831,6 +831,12 @@ function createCellElement(prop, index, row, col) {
   overlay.id = `overlay-${index}`;
   cell.appendChild(overlay);
 
+  const ownerBadge = document.createElement('div');
+  ownerBadge.className = 'cell-owner-badge hidden';
+  ownerBadge.id = `owner-badge-${index}`;
+  ownerBadge.setAttribute('aria-hidden', 'true');
+  cell.appendChild(ownerBadge);
+
   const emoji = document.createElement('div');
   emoji.className = 'cell-emoji';
   emoji.textContent = getCellEmoji(prop.type);
@@ -926,15 +932,40 @@ function renderBuildings(propIndex) {
 // ===== 所有者オーバーレイ更新 =====
 function updateCellOwner(propIndex) {
   const overlay = document.getElementById(`overlay-${propIndex}`);
-  if (!overlay) return;
+  const badge = document.getElementById(`owner-badge-${propIndex}`);
+  const cell = document.getElementById(`cell-${propIndex}`);
+  if (!overlay || !cell) return;
+
   const ownerIdx = gameState.landOwners[propIndex];
   if (ownerIdx !== undefined) {
-    overlay.style.background = gameState.players[ownerIdx].color;
+    const owner = gameState.players[ownerIdx];
+    overlay.style.background = owner.color;
+    cell.classList.add('is-owned');
+
+    if (badge) {
+      badge.classList.remove('hidden');
+      badge.style.backgroundColor = owner.color;
+      badge.replaceChildren();
+
+      const icon = document.createElement('span');
+      icon.className = 'cell-owner-icon';
+      icon.textContent = owner.emoji;
+      const name = document.createElement('span');
+      name.className = 'cell-owner-name';
+      name.textContent = owner.name.length > 4 ? `${owner.name.slice(0, 4)}…` : owner.name;
+      badge.append(icon, name);
+      badge.setAttribute('aria-label', `${owner.name}の土地`);
+    }
   } else {
     overlay.style.background = 'transparent';
+    cell.classList.remove('is-owned');
+    if (badge) {
+      badge.classList.add('hidden');
+      badge.replaceChildren();
+      badge.removeAttribute('aria-label');
+    }
   }
-  const cell = document.getElementById(`cell-${propIndex}`);
-  if (cell) cell.classList.toggle('is-mortgaged', isMortgaged(propIndex));
+  cell.classList.toggle('is-mortgaged', isMortgaged(propIndex));
 }
 
 // ===== プレイヤーリスト描画 =====
