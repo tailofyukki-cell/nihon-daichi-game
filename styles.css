@@ -809,7 +809,7 @@ select:focus-visible { outline: 3px solid rgba(245, 193, 82, 0.95); outline-offs
 /* ===== スマホ最適化：盤面優先レイアウト ===== */
 .mobile-game-tabs { display: none; }
 
-@media (max-width: 760px) {
+@media (max-width: 1499px) {
   html, body { overflow: hidden; }
   #screen-game { height: 100dvh; min-height: 100dvh; overflow: hidden; }
   .game-layout { position: relative; display: block; height: 100%; width: 100%; overflow: hidden; background: #0a0e1a; }
@@ -972,4 +972,59 @@ select:focus-visible { outline: 3px solid rgba(245, 193, 82, 0.95); outline-offs
   .volume-control input { width: 62px; }
 
   .modal-content { max-width: calc(100vw - 28px); }
+}
+
+/* 横幅に余裕のあるタブレットは、盤面を少し拡大してタップ精度を高める */
+@media (min-width: 520px) and (max-width: 900px) {
+  .board {
+    grid-template-columns: 42px repeat(14, 25px) 42px;
+    grid-template-rows: 42px repeat(14, 25px) 42px;
+  }
+  .cell-emoji { font-size: 0.76rem; }
+  .cell-name { font-size: 0.47rem; }
+  .cell-price { font-size: 0.42rem; }
+  .cell.side-right .cell-name, .cell.side-left .cell-name { font-size: 0.44rem; }
+  .cell.side-right .cell-price, .cell.side-left .cell-price { font-size: 0.4rem; }
+  .cell-owner-badge { width: 13px; height: 13px; min-width: 13px; min-height: 13px; }
+  .cell-owner-icon { font-size: 0.46rem; }
+  .token { width: 15px; height: 15px; font-size: 0.48rem; }
+  .token.current-token { width: 23px; height: 23px; font-size: 0.7rem; }
+}
+
+/* ノートPC・横向きタブレットでは、3カラムにせず盤面の全周表示を優先する */
+@media (min-width: 901px) and (max-width: 1499px) {
+  .board {
+    grid-template-columns: clamp(48px, 4vw, 60px) repeat(14, clamp(29px, 2.4vw, 36px)) clamp(48px, 4vw, 60px);
+    grid-template-rows: clamp(48px, 4vw, 60px) repeat(14, clamp(29px, 2.4vw, 36px)) clamp(48px, 4vw, 60px);
+  }
+  .cell-emoji { font-size: 0.88rem; }
+  .cell-name { font-size: 0.56rem; }
+  .cell-price { font-size: 0.5rem; }
+  .cell.side-right .cell-name, .cell.side-left .cell-name { font-size: 0.52rem; }
+  .cell.side-right .cell-price, .cell.side-left .cell-price { font-size: 0.48rem; }
+  .cell-owner-badge { width: 15px; height: 15px; min-width: 15px; min-height: 15px; }
+  .cell-owner-icon { font-size: 0.54rem; }
+  .token { width: 17px; height: 17px; font-size: 0.55rem; }
+  .token.current-token { width: 26px; height: 26px; font-size: 0.78rem; }
+}
+
+/* 320px級の小型端末では、盤面全周が見切れない寸法を優先する */
+@media (max-width: 340px) {
+  .board {
+    grid-template-columns: 28px repeat(14, 17px) 28px;
+    grid-template-rows: 28px repeat(14, 17px) 28px;
+    padding: 2px;
+  }
+  .board-center-logo { font-size: 20px; }
+  .board-center-title { font-size: 0.48rem; }
+  .board-center-turn { font-size: 0.36rem; max-width: 145px; }
+  .cell-emoji { font-size: 0.55rem; }
+  .cell-name { font-size: 0.34rem; }
+  .cell-price { font-size: 0.32rem; }
+  .cell.side-right .cell-name, .cell.side-left .cell-name { font-size: 0.32rem; }
+  .cell.side-right .cell-price, .cell.side-left .cell-price { font-size: 0.3rem; }
+  .cell-owner-badge { width: 9px; height: 9px; min-width: 9px; min-height: 9px; }
+  .cell-owner-icon { font-size: 0.31rem; }
+  .token { width: 12px; height: 12px; font-size: 0.38rem; }
+  .token.current-token { width: 18px; height: 18px; font-size: 0.55rem; }
 }
